@@ -10,7 +10,7 @@ import { REPORTS, SAMPLE_COLUMNS } from '../api/reports.js';
 import { downloadCsv, downloadXlsx } from '../lib/export.js';
 import { friendlyError } from '../lib/errors.js';
 import { fmtDate, yesNo } from '../lib/format.js';
-import { boxColor, fmtPct, pct } from '../lib/grid.js';
+import { boxColorOf, fmtPct, pct } from '../lib/grid.js';
 import { useToast } from '../components/Toast.jsx';
 import { SampleDetails } from '../components/SampleDetails.jsx';
 import {
@@ -190,7 +190,7 @@ function SearchSection() {
                       <td className="px-4 py-3 text-slate-700">{r.rack_name}</td>
                       <td className="px-4 py-3 text-slate-700">
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: boxColor(r.box_color).fill }} />{r.box_name}
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: boxColorOf(r).fill }} />{r.box_name}
                         </span>
                       </td>
                       <td className="px-4 py-3"><span className="font-semibold text-brand-800">{r.position}</span></td>
@@ -222,7 +222,7 @@ function SearchSection() {
         <SampleDetails
           readOnly
           sample={details}
-          box={{ name: details.box_name, rack_name: details.rack_name, tank_name: details.tank_name, color: details.box_color }}
+          box={{ name: details.box_name, rack_name: details.rack_name, tank_name: details.tank_name, rack_color: details.rack_color, shade_index: details.shade_index, shade_count: details.shade_count }}
           onClose={() => setDetails(null)}
         />
       )}

@@ -6,10 +6,10 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { useFormSubmit } from '../components/useFormSubmit.js';
 import { friendlyError } from '../lib/errors.js';
-import { pct } from '../lib/grid.js';
+import { RACK_COLORS, boxColor, pct, rackShade } from '../lib/grid.js';
 import {
   Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, Menu, Modal, PageHeader,
-  ProgressBar, SearchInput, Select, Spinner, StatusBadge, Textarea,
+  ProgressBar, SearchInput, Select, Spinner, StatusBadge, Textarea, cx,
 } from '../components/ui.jsx';
 
 function RackForm({ rack, tanks, defaultTankId, onClose }) {
@@ -19,6 +19,7 @@ function RackForm({ rack, tanks, defaultTankId, onClose }) {
     name: rack?.name ?? '',
     position: rack?.position ?? '',
     box_capacity: rack?.box_capacity ?? 12,
+    color: rack?.color ?? 'blue',
     notes: rack?.notes ?? '',
   });
   const [touched, setTouched] = useState(false);
@@ -48,6 +49,7 @@ function RackForm({ rack, tanks, defaultTankId, onClose }) {
         name: form.name.trim(),
         position: form.position === '' ? null : Number(form.position),
         box_capacity: Number(form.box_capacity),
+        color: form.color,
         notes: form.notes.trim(),
       }),
       { success: (r) => `Rack "${r.name}" ${isNew ? 'added' : 'saved'}.`, onDone: onClose },
@@ -83,6 +85,26 @@ function RackForm({ rack, tanks, defaultTankId, onClose }) {
         </div>
         <Field label="Box Capacity" required error={touched && errors.box_capacity}>
           <Input type="number" min={1} max={100} value={form.box_capacity} onChange={set('box_capacity')} />
+        </Field>
+        <Field label="Rack Color" hint="Boxes in this rack show shades of this color, light to dark">
+          <div>
+            <div role="radiogroup" aria-label="Rack color" className="flex flex-wrap gap-2">
+              {RACK_COLORS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.color === c.id}
+                  aria-label={c.label}
+                  title={c.label}
+                  onClick={() => setForm((f) => ({ ...f, color: c.id }))}
+                  className={cx('h-8 w-8 rounded-full ring-offset-2 transition', form.color === c.id ? 'ring-2 ring-slate-800' : 'hover:scale-110')}
+                  style={{ background: c.fill }}
+                />
+              ))}
+            </div>
+            <div className="mt-3 h-3 rounded-full" style={{ background: `linear-gradient(90deg, ${rackShade(form.color, 1, 3).fill}, ${rackShade(form.color, 2, 3).fill}, ${rackShade(form.color, 3, 3).fill})` }} aria-hidden="true" />
+          </div>
         </Field>
         <Field label="Notes">
           <Textarea value={form.notes} onChange={set('notes')} maxLength={2000} />
@@ -176,7 +198,7 @@ export default function RacksPage() {
               className="p-5 cursor-pointer transition-all hover:shadow-md hover:border-slate-300"
             >
               <div className="flex items-start gap-3">
-                <div className="h-11 w-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-blue-700 font-semibold">
+                <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 font-semibold" style={{ background: boxColor(r.color).fill, color: boxColor(r.color).text }}>
                   {r.name.slice(0, 3)}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -197,6 +219,7 @@ export default function RacksPage() {
                   />
                 </div>
               </div>
+              <div className="mt-4 h-2 rounded-full" aria-hidden="true" style={{ background: `linear-gradient(90deg, ${rackShade(r.color, 1, 3).fill}, ${rackShade(r.color, 2, 3).fill}, ${rackShade(r.color, 3, 3).fill})` }} />
               {r.notes && <p className="mt-3 text-sm text-slate-500 line-clamp-2">{r.notes}</p>}
               <div className="mt-4 pt-3 border-t border-slate-100">
                 <div className="flex items-center justify-between text-sm mb-2">

@@ -5,7 +5,7 @@ import { useBoxSamples, useBoxes } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import SampleForm from '../components/SampleForm.jsx';
 import { MoveDialog, RemoveDialog, SampleDetails } from '../components/SampleDetails.jsx';
-import { boxColor, fmtPct, parsePosition, pct, positionLabel, rowLabel } from '../lib/grid.js';
+import { boxColorOf, fmtPct, parsePosition, pct, positionLabel, rowLabel } from '../lib/grid.js';
 import { fmtDate, yesNo } from '../lib/format.js';
 import { Button, Card, EmptyState, ErrorState, ProgressBar, Select, Spinner, cx } from '../components/ui.jsx';
 
@@ -33,7 +33,7 @@ function Tooltip({ hover }) {
 function BoxGrid({ box, samples, canEdit, highlight, onEmpty, onSample }) {
   const [hover, setHover] = useState(null);
   const gridRef = useRef(null);
-  const color = boxColor(box.color);
+  const color = boxColorOf(box);
   const byPos = useMemo(() => new Map(samples.map((s) => [`${s.row_num}-${s.col_num}`, s])), [samples]);
 
   useEffect(() => {
@@ -170,7 +170,7 @@ export default function GridViewPage() {
   const samples = samplesQ.data || [];
   const filled = samples.length;
   const total = box.rows * box.cols;
-  const color = boxColor(box.color);
+  const color = boxColorOf(box);
   const close = () => setDialog(null);
 
   return (

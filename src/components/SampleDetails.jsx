@@ -3,7 +3,7 @@ import { Archive, ArrowRightLeft, History, Pencil, Trash2 } from 'lucide-react';
 import { moveSample, saveRow, useBoxSamples, useBoxes, useInventoryMutation, useSampleHistory } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { useFormSubmit } from './useFormSubmit.js';
-import { boxColor, positionLabel, rowLabel } from '../lib/grid.js';
+import { boxColorOf, positionLabel, rowLabel } from '../lib/grid.js';
 import { fmtDate, fmtDateTime, yesNo } from '../lib/format.js';
 import { Alert, Badge, Button, Field, Modal, Segmented, Select, Spinner, Textarea, cx } from './ui.jsx';
 
@@ -86,7 +86,7 @@ export function SampleDetails({ sample, box, onClose, onEdit, onMove, onRemove, 
   const [tab, setTab] = useState('details');
   const { data: boxes } = useBoxes();
   const boxesById = useMemo(() => Object.fromEntries((boxes || []).map((b) => [b.id, b])), [boxes]);
-  const c = boxColor(box.color);
+  const c = boxColorOf(box);
   return (
     <Modal
       open
@@ -205,7 +205,7 @@ export function MoveDialog({ sample, fromBox, onClose, onMoved }) {
             <span />
             {Array.from({ length: box.cols }, (_, i) => <span key={i} className="text-center text-[11px] text-slate-400">{i + 1}</span>)}
             {Array.from({ length: box.rows }, (_, r) => (
-              <FragmentRow key={r} r={r + 1} cols={box.cols} taken={taken} sample={sample} target={target} setTarget={setTarget} color={boxColor(box.color)} />
+              <FragmentRow key={r} r={r + 1} cols={box.cols} taken={taken} sample={sample} target={target} setTarget={setTarget} color={boxColorOf(box)} />
             ))}
           </div>
         </div>

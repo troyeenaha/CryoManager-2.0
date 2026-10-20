@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { useFormSubmit } from '../components/useFormSubmit.js';
 import { friendlyError } from '../lib/errors.js';
-import { BOX_COLORS, GRID_PRESETS, boxColor, fmtPct, pct } from '../lib/grid.js';
+import { GRID_PRESETS, boxColor, boxColorOf, fmtPct, pct, rackShade } from '../lib/grid.js';
 import {
   Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, Menu, Modal, PageHeader,
   ProgressBar, SearchInput, Select, Spinner, StatusBadge, Textarea, cx,
@@ -20,7 +20,6 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
     name: box?.name ?? '',
     rows: box?.rows ?? settings?.default_box_rows ?? 9,
     cols: box?.cols ?? settings?.default_box_cols ?? 9,
-    color: box?.color ?? 'blue',
     notes: box?.notes ?? '',
   });
   const [touched, setTouched] = useState(false);
@@ -54,7 +53,6 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
         name: form.name.trim(),
         rows: Number(form.rows),
         cols: Number(form.cols),
-        color: form.color,
         notes: form.notes.trim(),
       }),
       { success: (b) => `Box "${b.name}" ${isNew ? 'added' : 'saved'}.`, onDone: onClose },
@@ -104,23 +102,18 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
           </div>
         )}
         {!isNew && <p className="text-xs text-slate-500 -mt-2">A grid can only be shrunk if no samples sit in the rows or columns being removed.</p>}
-        <Field label="Color">
-          <div role="radiogroup" aria-label="Box color" className="flex flex-wrap gap-2">
-            {BOX_COLORS.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                role="radio"
-                aria-checked={form.color === c.id}
-                aria-label={c.label}
-                title={c.label}
-                onClick={() => setForm((f) => ({ ...f, color: c.id }))}
-                className={cx('h-8 w-8 rounded-full ring-offset-2 transition', form.color === c.id ? 'ring-2 ring-slate-800' : 'hover:scale-110')}
-                style={{ background: c.fill }}
-              />
-            ))}
+        {rack && (
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <div className="flex gap-1" aria-hidden="true">
+              {Array.from({ length: Math.min(rack.box_capacity, 12) }, (_, i) => (
+                <span key={i} className="h-5 w-3 rounded-sm" style={{ background: rackShade(rack.color, i + 1, Math.min(rack.box_capacity, 12)).fill }} />
+              ))}
+            </div>
+            <p className="text-xs text-slate-600">
+              Color comes from <strong>Rack {rack.name}</strong> ({boxColor(rack.color).label}). Each box gets its own shade, lightest to darkest by box name.
+            </p>
           </div>
-        </Field>
+        )}
         <Field label="Notes">
           <Textarea value={form.notes} onChange={set('notes')} maxLength={2000} />
         </Field>
@@ -131,7 +124,7 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
 
 function MiniGrid({ box }) {
   // Small occupancy-free preview of the grid shape
-  const c = boxColor(box.color);
+  const c = boxColorOf(box);
   const rows = Math.min(box.rows, 12);
   const cols = Math.min(box.cols, 12);
   return (
@@ -212,7 +205,7 @@ export default function BoxesPage() {
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {boxes.map((b) => {
-            const c = boxColor(b.color);
+            const c = boxColorOf(b);
             return (
               <Card key={b.id} className="p-5 flex flex-col">
                 <div className="flex items-start gap-3">

@@ -21,6 +21,32 @@ export const BOX_COLORS = [
 ];
 
 export const boxColor = (id) => BOX_COLORS.find((c) => c.id === id) || BOX_COLORS[0];
+export const RACK_COLORS = BOX_COLORS;
+
+const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const rgbToHex = (rgb) => `#${rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const luminance = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+
+/**
+ * Shade `index` (1-based) of `count` boxes in a rack of color `rackColorId`:
+ * the first box is lightest, the last darkest, the middle ≈ the rack color.
+ */
+export function rackShade(rackColorId, index = 1, count = 1) {
+  const base = hexToRgb(boxColor(rackColorId).fill);
+  const t = count <= 1 ? 0.5 : (index - 1) / (count - 1);
+  const rgb = t < 0.5
+    ? mix(mix(base, [255, 255, 255], 0.5), base, t * 2)
+    : mix(base, mix(base, [0, 0, 0], 0.4), (t - 0.5) * 2);
+  return {
+    fill: rgbToHex(rgb),
+    soft: rgbToHex(mix(rgb, [255, 255, 255], 0.75)),
+    text: luminance(rgb) > 0.62 ? '#0F172A' : '#FFFFFF',
+  };
+}
+
+/** Color for any row that carries rack_color / shade_index / shade_count. */
+export const boxColorOf = (row) => rackShade(row?.rack_color || row?.color || 'blue', row?.shade_index, row?.shade_count);
 
 export const GRID_PRESETS = [
   { label: '9 × 9 (81)', rows: 9, cols: 9 },

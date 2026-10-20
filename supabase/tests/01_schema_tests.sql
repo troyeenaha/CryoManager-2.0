@@ -182,6 +182,18 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 set role authenticated;
 select test.expect((select count(*) = 0 from samples), 'disabled member loses access immediately');
 
+-- ----- rack colors & box shades -------------------------------------
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+update racks set color = 'purple', box_capacity = 12 where name = 'A';
+insert into boxes (rack_id, name) values ('20000000-0000-0000-0000-000000000001', 'A10'), ('20000000-0000-0000-0000-000000000001', 'A2');
+select test.expect((select string_agg(name || ':' || shade_index || '/' || shade_count, ',' order by shade_index)
+                      = 'A1:1/3,A2:2/3,A10:3/3' from box_summary where rack_name = 'A'),
+  'boxes take natural-order shades of their rack');
+select test.expect((select bool_and(rack_color = 'purple') from box_summary where rack_name = 'A'), 'boxes inherit rack color');
+select test.expect((select rack_color = 'purple' and shade_count = 3 from sample_locations limit 1), 'sample locations carry the rack shade');
+
 reset role;
 \echo
 \echo 'ALL DATABASE TESTS PASSED'
