@@ -7,8 +7,8 @@ A lab administrator will then approve you. The page updates on its own once they
 (S-000123), position (B7), box, researcher or passage number. Click a result to jump straight to its spot in the grid, highlighted in amber.
 
 **Add a sample.** **Grid View** → choose the box → click an empty (dashed) square → fill in the
-form → **Save**. The position is filled in for you. Only *Sample Name* is required. Open
-*Advanced Details* for vial count, project, markers and notes.
+form → **Save**. The grid name (e.g. A1B4) is filled in for you. Everything above
+*Advanced Details* is required; Advanced Details (project, markers, notes) is optional.
 
 **One square = one vial.** Every vial gets its own square and its own permanent Sample ID (S-000001, S-000002 …). The ID never changes, even when the vial moves, so it is the safest way to refer to a vial.
 
