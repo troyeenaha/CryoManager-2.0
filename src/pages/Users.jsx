@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Check, ShieldOff, UserCheck, Users as UsersIcon } from 'lucide-react';
+import { Check, ShieldOff, UserCheck, UserPlus, Users as UsersIcon } from 'lucide-react';
+import { AddPersonDialog, InvitationsList } from '../components/AddPerson.jsx';
 import { supabase, unwrap } from '../lib/supabase.js';
 import { useInventoryMutation, useProfiles } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
@@ -26,6 +27,7 @@ export default function UsersPage() {
   const { data, isLoading, error, refetch } = useProfiles();
   const [confirm, setConfirm] = useState(null);
   const [roleFor, setRoleFor] = useState({}); // pending user id -> chosen role
+  const [adding, setAdding] = useState(false);
   const mutate = useInventoryMutation(({ id, values }) => updateProfile(id, values));
 
   async function apply(user, values, message) {
@@ -47,7 +49,12 @@ export default function UsersPage() {
 
   return (
     <>
-      <PageHeader title="Users" subtitle="Approve new accounts, set roles and remove access" />
+      <PageHeader
+        title="Users"
+        subtitle="Add people, set what they can do, and remove access"
+        actions={<Button onClick={() => setAdding(true)}><UserPlus className="h-4 w-4" /> Add person</Button>}
+      />
+      {adding && <AddPersonDialog onClose={() => setAdding(false)} existingEmails={new Set((data || []).map((u) => u.email.toLowerCase()))} />}
 
       <div className="grid sm:grid-cols-3 gap-3 mb-8">
         {Object.entries(ROLE_HELP).map(([role, help]) => (
@@ -57,6 +64,8 @@ export default function UsersPage() {
           </Card>
         ))}
       </div>
+
+      <InvitationsList />
 
       <section className="mb-8" aria-labelledby="pending-h">
         <h2 id="pending-h" className="text-lg font-semibold text-slate-900 mb-3">Waiting for approval {pending.length > 0 && `(${pending.length})`}</h2>

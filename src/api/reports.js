@@ -5,7 +5,6 @@ import { positionLabel } from '../lib/grid.js';
 import { fmtDateTime, yesNo } from '../lib/format.js';
 
 export const SAMPLE_COLUMNS = [
-  { key: 'sample_code', label: 'Sample ID' },
   { key: 'sample_name', label: 'Sample' },
   { key: 'tank_name', label: 'Tank' },
   { key: 'rack_name', label: 'Rack' },
@@ -132,11 +131,11 @@ export const REPORTS = [
         table: {
           columns: [
             { key: 'when', label: 'Date & time' }, { key: 'who', label: 'Moved by' },
-            { key: 'id', label: 'Sample ID' }, { key: 'sample', label: 'Sample' },
+            { key: 'sample', label: 'Sample' },
             { key: 'from', label: 'From' }, { key: 'to', label: 'To' },
           ],
           rows: events.map((e) => ({
-            when: fmtDateTime(e.occurred_at), who: e.actor_email || '', id: e.new_values.sample_code,
+            when: fmtDateTime(e.occurred_at), who: e.actor_email || '',
             sample: e.entity_label, from: where(e.old_values), to: where(e.new_values),
           })),
         },

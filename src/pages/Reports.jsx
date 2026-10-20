@@ -109,7 +109,6 @@ function CellLineGroup({ group, open, onToggle, onOpenRow, nameOf }) {
               <tr>
                 <th className="px-4 py-2.5">Grid name</th>
                 <th className="px-4 py-2.5">Location</th>
-                <th className="px-4 py-2.5">Sample ID</th>
                 <th className="px-4 py-2.5">Passage</th>
                 <th className="px-4 py-2.5">Who passaged</th>
                 <th className="px-4 py-2.5">Date of passage</th>
@@ -138,7 +137,6 @@ function CellLineGroup({ group, open, onToggle, onOpenRow, nameOf }) {
                     {r.box_label && <span className="text-slate-400"> · {r.box_label}</span>}
                     <div className="text-xs text-slate-500">Position {r.position}</div>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">{r.sample_code}</td>
                   <td className="px-4 py-2.5 text-slate-700">{r.passage_number ?? '—'}</td>
                   <td className="px-4 py-2.5 text-slate-700">
                     <span className="font-semibold">{r.passaged_by || '—'}</span>
@@ -223,7 +221,7 @@ function SearchSection() {
           <SearchInput
             value={term}
             onChange={setTerm}
-            placeholder="Cell line, construct, person (name or initials), box nickname, A1B4, S-000123…"
+            placeholder="Cell line, construct, person (name or initials), box nickname, grid name like A1B4…"
             className="flex-1"
           />
           <div className="flex gap-2">

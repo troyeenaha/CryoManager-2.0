@@ -12,7 +12,6 @@ import { Alert, Badge, Button, Field, Modal, Segmented, Select, Spinner, Textare
 
 const FIELDS = [
   ['Grid Name', (s, b) => `${b.name}${positionLabel(s.row_num, s.col_num)}`],
-  ['Sample ID', (s) => s.sample_code],
   ['Transfected', (s) => yesNo(s.transfected)],
   ['Transfected With', (s) => s.transfected_with || '—'],
   ['Passage No.', (s) => s.passage_number ?? '—'],

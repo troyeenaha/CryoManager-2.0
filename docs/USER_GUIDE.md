@@ -3,14 +3,14 @@
 **Getting access.** Open the CryoManager link and click **Request an account**. Confirm your email.
 A lab administrator will then approve you. The page updates on its own once they do.
 
-**Find a sample.** Go to **Reports** and type anything into *Find a sample*: name, cell line, sample ID
-(S-000123), position (B7), box, researcher or passage number. Click a result to jump straight to its spot in the grid, highlighted in amber.
+**Find a sample.** Go to **Reports** and type anything into *Find a sample*: name, cell line, grid name
+(A1B4), position (B7), box, researcher or passage number. Click a result to jump straight to its spot in the grid, highlighted in amber.
 
 **Add a sample.** **Grid View** → choose the box → click an empty (dashed) square → fill in the
 form → **Save**. The grid name (e.g. A1B4) is filled in for you. Everything above
 *Advanced Details* is required; Advanced Details (project, markers, notes) is optional.
 
-**One square = one vial.** Every vial gets its own square and its own permanent Sample ID (S-000001, S-000002 …). The ID never changes, even when the vial moves, so it is the safest way to refer to a vial.
+**One square = one vial.** Each vial is identified by its grid name: box + position, e.g. A1B4.
 
 **Move samples.** Within the same box, drag a sample onto an empty square. To move one or many to another box: **Select samples** → click them (or a row letter) → **Move to another box** → choose the box → click the new squares (or **Fill first empty squares**) → **Move**. All of them move together, or none do.
 

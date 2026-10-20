@@ -16,7 +16,7 @@ const where = (box, row, col) =>
 export function buildMoveEmail({ moves, me, note }) {
   const n = moves.length;
   const lines = moves.slice(0, 25).map((m) =>
-    `• ${m.sample.sample_name} (${m.sample.sample_code}): ${where(m.fromBox, m.from.row, m.from.col)} → ${where(m.toBox, m.to.row, m.to.col)}`);
+    `• ${m.sample.sample_name}: ${where(m.fromBox, m.from.row, m.from.col)} → ${where(m.toBox, m.to.row, m.to.col)}`);
   if (n > 25) lines.push(`…and ${n - 25} more (see CryoManager → Reports → Sample movement history).`);
   const subject = n === 1
     ? `CryoManager: ${moves[0].sample.sample_name} moved to ${moves[0].toBox.name}${positionLabel(moves[0].to.row, moves[0].to.col)}`

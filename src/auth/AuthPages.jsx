@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { friendlyError } from '../lib/errors.js';
 import { useAuth } from './AuthProvider.jsx';
 import { cleanInitials, suggestInitials } from '../lib/format.js';
-import { BrandMark } from '../components/Brand.jsx';
+import { BrandMark, LabLogo } from '../components/Brand.jsx';
 import { Button, Field, Input, Alert } from '../components/ui.jsx';
 
 function AuthShell({ children, title, subtitle }) {
@@ -23,15 +23,22 @@ function AuthShell({ children, title, subtitle }) {
           {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
           <div className="mt-6">{children}</div>
         </div>
-        <p className="text-center text-xs text-slate-400 mt-6">Thurber Lab · University of Michigan</p>
+        <div className="mt-8"><LabLogo className="max-h-20" /></div>
       </div>
     </div>
   );
 }
 
 export function LoginPage() {
-  const [mode, setMode] = useState('signin'); // signin | signup | forgot
-  const [form, setForm] = useState({ name: '', initials: '', email: '', password: '' });
+  // An invite link (?signup=1&email=…&name=…&initials=…) opens sign-up pre-filled.
+  const invite = new URLSearchParams(window.location.search);
+  const [mode, setMode] = useState(invite.get('signup') ? 'signup' : 'signin'); // signin | signup | forgot
+  const [form, setForm] = useState({
+    name: invite.get('name') || '',
+    initials: cleanInitials(invite.get('initials') || ''),
+    email: invite.get('email') || '',
+    password: '',
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -58,7 +65,7 @@ export function LoginPage() {
           options: { data: { full_name: form.name.trim(), initials: cleanInitials(form.initials) }, emailRedirectTo: window.location.origin },
         });
         if (err) throw err;
-        setNotice('Account created. Check your email to confirm your address; an administrator will then approve your access.');
+        setNotice('Account created. Check your email and click the confirmation link, then sign in. If an administrator added you, you can start right away; otherwise they will approve your access.');
         setMode('signin');
       } else {
         const { error: err } = await supabase.auth.resetPasswordForEmail(form.email.trim(), {
@@ -77,7 +84,9 @@ export function LoginPage() {
 
   const titles = {
     signin: ['Sign in', 'Use your lab account to access the inventory.'],
-    signup: ['Request access', 'Create an account. A lab administrator must approve it before you can see the inventory.'],
+    signup: invite.get('signup')
+      ? ['Create your account', "You've been added to CryoManager. Choose a password to finish; use the email address you were invited with."]
+      : ['Request access', 'Create an account. A lab administrator must approve it before you can see the inventory.'],
     forgot: ['Reset password', 'We will email you a secure link to choose a new password.'],
   };
 

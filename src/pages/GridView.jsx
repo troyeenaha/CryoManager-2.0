@@ -42,7 +42,6 @@ function Tips({ canEdit }) {
       ['Move or take out several samples', 'click Select samples, pick them, then Move to another box or Take out.'],
       ['See details', 'hover over a sample; click it to view, edit, move or take it out.'],
       ['Grid names', 'are box + position, e.g. A1B4 = box A1, row B, column 4.'],
-      ['Sample IDs', '(S-000001…) are permanent and never change, even when a vial moves.'],
     ]
     : [
       ['See details', 'hover over a sample, or click it for everything including its history.'],
@@ -79,7 +78,7 @@ function Tooltip({ hover, boxName }) {
   return (
     <div className="fixed z-40 w-[270px] pointer-events-none rounded-xl border border-slate-200 bg-white p-3 shadow-lg text-sm" style={{ top, left }} role="tooltip">
       <div className="font-semibold text-slate-900 truncate">{s.sample_name}</div>
-      <div className="text-xs text-slate-500 mb-2">{boxName}{positionLabel(s.row_num, s.col_num)} · {s.sample_code}</div>
+      <div className="text-xs text-slate-500 mb-2">{boxName}{positionLabel(s.row_num, s.col_num)}</div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
         <dt className="text-slate-500">Transfected</dt>
         <dd className="truncate">{yesNo(s.transfected)}{s.transfected && s.transfected_with ? ` — ${s.transfected_with}` : ''}</dd>

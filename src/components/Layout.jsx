@@ -88,7 +88,7 @@ function Sidebar({ onNavigate }) {
           </button>
         </div>
         <div className="mt-3 pt-4 pb-1 border-t border-slate-100">
-          <LabLogo />
+          <LabLogo className="max-h-16" />
         </div>
       </div>
     </div>

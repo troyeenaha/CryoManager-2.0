@@ -93,7 +93,7 @@ const clean = (s) => (s || '').replace(/[,()*\\:"%]/g, ' ').trim();
  * project, tank / rack / box names, plus optional filters. Paginated.
  */
 const SEARCH_FIELDS = [
-  'sample_name', 'sample_code', 'grid_name', 'position', 'transfected_with', 'tank_name', 'rack_name', 'box_name',
+  'sample_name', 'grid_name', 'position', 'transfected_with', 'tank_name', 'rack_name', 'box_name',
   'box_label', 'researcher_responsible', 'passaged_by', 'media', 'project', 'cell_line_origin',
   'genetic_modifications', 'selection_marker', 'antibiotic_resistance', 'notes',
 ];

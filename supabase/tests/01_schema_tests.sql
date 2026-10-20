@@ -261,6 +261,24 @@ select test.expect_error($q$select * from move_samples(jsonb_build_array(
   jsonb_build_object('id','50000000-0000-0000-0000-000000000001','version',1,'box_id','30000000-0000-0000-0000-000000000001','row',12,'col',1)))$q$,
   '%changed by someone else%');
 
+-- ----- adding people from the app --------------------------------------
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+insert into invitations (email, full_name, initials, role) values (' Kim.Lee@UMICH.edu ', 'Kim Lee', 'KL', 'member');
+select test.expect((select email = 'kim.lee@umich.edu' and invited_by = '00000000-0000-0000-0000-00000000000a' from invitations), 'invitation stored with clean email and inviter');
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values ('00000000-0000-0000-0000-0000000000f1', 'kim.lee@umich.edu', '{}');
+select test.expect((select role = 'member' and status = 'active' and initials = 'KL' and full_name = 'Kim Lee'
+                      from profiles where email = 'kim.lee@umich.edu'), 'invited person is active immediately with their role');
+select test.expect((select accepted_at is not null from invitations where email = 'kim.lee@umich.edu'), 'invitation marked as used');
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000f2', 'stranger@gmail.com');
+select test.expect((select status = 'pending' and role = 'viewer' from profiles where email = 'stranger@gmail.com'), 'uninvited sign-ups still wait for approval');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000f1"}', false);
+set role authenticated;
+select test.expect((select count(*) = 0 from invitations), 'non-admins cannot see invitations');
+select test.expect_error($q$insert into invitations (email) values ('x@y.edu')$q$, '%row-level security%');
+
 reset role;
 \echo
 \echo 'ALL DATABASE TESTS PASSED'
