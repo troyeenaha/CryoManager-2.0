@@ -18,6 +18,7 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
   const [form, setForm] = useState({
     rack_id: box?.rack_id ?? defaultRackId ?? '',
     name: box?.name ?? '',
+    label: box?.label ?? '',
     rows: box?.rows ?? settings?.default_box_rows ?? 9,
     cols: box?.cols ?? settings?.default_box_cols ?? 9,
     notes: box?.notes ?? '',
@@ -51,6 +52,7 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
         version: box?.version,
         rack_id: form.rack_id,
         name: form.name.trim(),
+        label: form.label.trim(),
         rows: Number(form.rows),
         cols: Number(form.cols),
         notes: form.notes.trim(),
@@ -70,9 +72,14 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
       <form id="box-form" onSubmit={submit} className="space-y-4" noValidate>
         {error && <Alert tone="error">{error}</Alert>}
         {full && <Alert tone="warning">Rack {rack.name} is full ({rack.box_count} / {rack.box_capacity} boxes).</Alert>}
-        <Field label="Box Name" required error={touched && errors.name} hint="Unique within its rack">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Box Name" required error={touched && errors.name} hint="Official ID, unique in its rack (used in grid names like A1B4)">
           <Input value={form.name} onChange={set('name')} placeholder="e.g. A1" maxLength={40} />
         </Field>
+          <Field label="Nickname" hint="Optional, e.g. Troyee 1. Searchable too.">
+            <Input value={form.label} onChange={set('label')} placeholder="e.g. Troyee 1" maxLength={60} />
+          </Field>
+        </div>
         <Field label="Rack" required error={touched && errors.rack_id}>
           <Select value={form.rack_id} onChange={set('rack_id')}>
             <option value="">Select a rack…</option>
@@ -159,7 +166,7 @@ export default function BoxesPage() {
     return (boxesQ.data || [])
       .filter((b) => showArchived || b.status !== 'archived')
       .filter((b) => !rackFilter || b.rack_id === rackFilter)
-      .filter((b) => !q || [b.name, b.rack_name, b.tank_name, b.notes].some((s) => (s || '').toLowerCase().includes(q)));
+      .filter((b) => !q || [b.name, b.label, b.rack_name, b.tank_name, b.notes].some((s) => (s || '').toLowerCase().includes(q)));
   }, [boxesQ.data, search, showArchived, rackFilter]);
 
   async function doConfirm() {
@@ -214,7 +221,7 @@ export default function BoxesPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs text-slate-500 truncate">{b.tank_name} › Rack {b.rack_name}</div>
-                    <h3 className="font-semibold text-slate-900 truncate">Box {b.name}</h3>
+                    <h3 className="font-semibold text-slate-900 truncate">Box {b.name}{b.label && <span className="font-normal text-slate-500"> · {b.label}</span>}</h3>
                     <div className="mt-1 flex items-center gap-2">
                       <StatusBadge status={b.status} />
                       <span className="text-xs text-slate-500">{b.rows} × {b.cols}</span>

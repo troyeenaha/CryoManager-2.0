@@ -10,6 +10,7 @@ export const SAMPLE_COLUMNS = [
   { key: 'tank_name', label: 'Tank' },
   { key: 'rack_name', label: 'Rack' },
   { key: 'box_name', label: 'Box' },
+  { key: 'box_label', label: 'Box Nickname' },
   { key: 'position', label: 'Position' },
   { key: 'grid_name', label: 'Grid Name' },
   { key: 'transfected', label: 'Transfected', value: (r) => yesNo(r.transfected) },
@@ -18,7 +19,6 @@ export const SAMPLE_COLUMNS = [
   { key: 'passaged_by', label: 'Who Passaged' },
   { key: 'passage_date', label: 'Date of Passage' },
   { key: 'media', label: 'Freezing Media' },
-  { key: 'vial_count', label: 'Vials' },
   { key: 'researcher_responsible', label: 'Researcher Responsible' },
   { key: 'date_frozen', label: 'Date Frozen' },
   { key: 'date_added', label: 'Date Added' },
@@ -39,13 +39,12 @@ function summarise(rows, keyFn, label) {
   const m = new Map();
   rows.forEach((r) => {
     const k = keyFn(r) || '(not recorded)';
-    const e = m.get(k) || { key: k, samples: 0, vials: 0 };
+    const e = m.get(k) || { key: k, samples: 0 };
     e.samples += 1;
-    e.vials += r.vial_count || 1;
     m.set(k, e);
   });
   return {
-    columns: [{ key: 'key', label }, { key: 'samples', label: 'Samples (positions)' }, { key: 'vials', label: 'Vials' }],
+    columns: [{ key: 'key', label }, { key: 'samples', label: 'Samples (vials)' }],
     rows: [...m.values()].sort((a, b) => String(a.key).localeCompare(String(b.key))),
   };
 }

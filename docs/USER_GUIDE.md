@@ -10,14 +10,13 @@ A lab administrator will then approve you. The page updates on its own once they
 form → **Save**. The position is filled in for you. Only *Sample Name* is required. Open
 *Advanced Details* for vial count, project, markers and notes.
 
-**Several vials in one slot?** Set *Number of Vials* in Advanced Details. The square shows ×3 and
-so on. A slot never holds two separate records.
+**One square = one vial.** Every vial gets its own square and its own permanent Sample ID (S-000001, S-000002 …). The ID never changes, even when the vial moves, so it is the safest way to refer to a vial.
 
-**Move a sample.** Click the sample → **Move** → pick the destination box and an empty square →
-confirm. The move is recorded in the sample's **History** tab.
+**Move samples.** Within the same box, drag a sample onto an empty square. To move one or many to another box: **Select samples** → click them (or a row letter) → **Move to another box** → choose the box → click the new squares (or **Fill first empty squares**) → **Move**. All of them move together, or none do.
 
-**Take a sample out.** Click it → **Remove / Archive** → choose *Archive* (used, thawed) or
-*Removed* (discarded) and add a short reason. The slot becomes free, and the record stays searchable
+**Box nicknames.** A box can have a nickname (e.g. *Troyee 1*) as well as its official name (A1). Search finds it by either; grid names always use the official name (A1B4).
+
+**Take a sample out.** Click it (or select several) → **Take out** → choose **Move to another box** or **Take out of storage**, then *Used / thawed* or *Discarded* with a short reason. The slot becomes free, and the record stays searchable
 (Reports → Filters → Status).
 
 **Someone else changed it first?** If two people edit the same sample at once, the second save is

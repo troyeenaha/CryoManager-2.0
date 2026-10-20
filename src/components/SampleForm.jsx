@@ -34,7 +34,6 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
     passaged_by: sample?.passaged_by ?? (isNew ? profile?.initials ?? '' : ''),
     media: sample?.media ?? (isNew ? MEDIA_PRESETS[0] : ''),
     passage_date: sample?.passage_date ?? '',
-    vial_count: sample?.vial_count ?? 1,
     date_frozen: sample?.date_frozen ?? (isNew ? todayISO() : ''),
     date_added: sample?.date_added ?? todayISO(),
     cell_line_origin: sample?.cell_line_origin ?? '',
@@ -75,7 +74,6 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
     passaged_by: !form.passaged_by && 'Choose who passaged.',
     media: !form.media.trim() && 'Required.',
     passage_date: !form.passage_date && 'Required.',
-    vial_count: !(Number.isInteger(Number(form.vial_count)) && Number(form.vial_count) >= 1 && Number(form.vial_count) <= 50) && '1–50 vials.',
   };
   const err = (k) => touched && errors[k];
 
@@ -83,14 +81,13 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
     e.preventDefault();
     setTouched(true);
     if (Object.values(errors).some(Boolean)) {
-      if (errors.vial_count) setAdvanced(true);
       return;
     }
     const values = { ...form };
     TEXT_FIELDS.forEach((k) => { values[k] = (values[k] || '').trim(); });
     if (values.transfected !== true) values.transfected_with = '';
     values.passage_number = Number(form.passage_number);
-    values.vial_count = Number(form.vial_count);
+    values.vial_count = 1; // one slot = one vial
     ['passage_date', 'date_frozen'].forEach((k) => { values[k] = form[k] || null; });
     values.date_added = form.date_added || todayISO();
     const where = gridNames.length > 3 ? `${gridNames.length} positions` : gridNames.join(', ');
@@ -213,9 +210,6 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
           </button>
           {advanced && (
             <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 gap-4 border-t border-slate-100">
-              <Field label="Number of Vials" error={err('vial_count')} hint={slots.length > 1 ? 'Per position' : 'Vials stored together in this one slot'}>
-                <Input type="number" min={1} max={50} value={form.vial_count} onChange={set('vial_count')} />
-              </Field>
               <Field label="Researcher Responsible">
                 <Input value={form.researcher_responsible} onChange={set('researcher_responsible')} maxLength={120} />
               </Field>

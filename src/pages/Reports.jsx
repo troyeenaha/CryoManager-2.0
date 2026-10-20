@@ -46,7 +46,7 @@ function Dashboard() {
         <Stat icon={Container} label="Tanks" value={s.tanks} />
         <Stat icon={LayoutList} label="Racks" value={s.racks} />
         <Stat icon={BoxesIcon} label="Boxes" value={s.boxes} />
-        <Stat icon={FlaskConical} label="Samples" value={s.samples} sub={`${s.vials} vial${s.vials === 1 ? '' : 's'}`} />
+        <Stat icon={FlaskConical} label="Samples" value={s.samples} sub="One vial per position" />
         <Stat icon={Grid3x3} label="Total positions" value={s.total_positions.toLocaleString()} />
         <Stat icon={SquareDashed} label="Available" value={s.available_positions.toLocaleString()} />
         <Stat icon={ChartPie} label="Occupied" value={s.occupied_positions.toLocaleString()} />
@@ -56,7 +56,7 @@ function Dashboard() {
           <ProgressBar value={util} className="mt-2" />
         </Card>
       </div>
-      <p className="text-xs text-slate-500 mt-2">Utilization counts occupied physical positions in active boxes, not sample names or vials.</p>
+      <p className="text-xs text-slate-500 mt-2">Utilization counts occupied physical positions in active boxes, not sample names.</p>
     </section>
   );
 }
@@ -183,14 +183,13 @@ function SearchSection() {
                         <div className="text-xs text-slate-500 flex items-center gap-2">
                           {r.sample_code}
                           {r.status !== 'active' && <StatusBadge status={r.status} />}
-                          {r.vial_count > 1 && <Badge tone="blue">{r.vial_count} vials</Badge>}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-700">{r.tank_name}</td>
                       <td className="px-4 py-3 text-slate-700">{r.rack_name}</td>
                       <td className="px-4 py-3 text-slate-700">
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: boxColorOf(r).fill }} />{r.box_name}
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: boxColorOf(r).fill }} />{r.box_name}{r.box_label && <span className="text-slate-400"> · {r.box_label}</span>}
                         </span>
                       </td>
                       <td className="px-4 py-3"><span className="font-semibold text-brand-800">{r.position}</span></td>
@@ -222,7 +221,7 @@ function SearchSection() {
         <SampleDetails
           readOnly
           sample={details}
-          box={{ name: details.box_name, rack_name: details.rack_name, tank_name: details.tank_name, rack_color: details.rack_color, shade_index: details.shade_index, shade_count: details.shade_count }}
+          box={{ name: details.box_name, label: details.box_label, rack_name: details.rack_name, tank_name: details.tank_name, rack_color: details.rack_color, shade_index: details.shade_index, shade_count: details.shade_count }}
           onClose={() => setDetails(null)}
         />
       )}

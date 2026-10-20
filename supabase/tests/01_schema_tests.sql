@@ -228,6 +228,39 @@ select test.expect_error($q$insert into samples (box_id, row_num, col_num, sampl
   ('30000000-0000-0000-0000-000000000001', 9, 11, 'Y'), ('30000000-0000-0000-0000-000000000001', 9, 9, 'Y')$q$, '%samples_one_per_position%');
 select test.expect((select count(*) = 0 from samples where sample_name = 'Y'), 'batch add is all-or-nothing');
 
+-- ----- box nicknames, one vial per slot, bulk move ---------------------
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+update boxes set label = 'Troyee 1' where id = '30000000-0000-0000-0000-000000000001';
+select test.expect((select bool_and(box_label = 'Troyee 1') from sample_locations where box_name = 'A1'), 'box nickname shows on sample locations');
+select test.expect((select label = 'Troyee 1' from box_summary where name = 'A1'), 'box nickname shows on box summary');
+select test.expect_error($q$insert into samples (box_id, row_num, col_num, sample_name, vial_count)
+  values ('30000000-0000-0000-0000-000000000001', 11, 1, 'Two vials', 2)$q$, '%samples_one_vial_per_slot%');
+
+-- bulk move: two samples from A1 row K into box A2, all-or-nothing
+insert into samples (id, box_id, row_num, col_num, sample_name) values
+  ('50000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 11, 1, 'M1'),
+  ('50000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', 11, 2, 'M2');
+select test.expect((select count(*) = 2 from move_samples(jsonb_build_array(
+  jsonb_build_object('id','50000000-0000-0000-0000-000000000001','version',1,'box_id',(select id from boxes where name='A10'),'row',1,'col',1),
+  jsonb_build_object('id','50000000-0000-0000-0000-000000000002','version',1,'box_id',(select id from boxes where name='A10'),'row',1,'col',2)))),
+  'bulk move moves both samples to another box');
+select test.expect((select count(*) = 2 from audit_log where action = 'move' and entity_label in ('M1','M2')), 'each bulk move is in the history');
+select test.expect_error($q$select * from move_samples(jsonb_build_array(
+  jsonb_build_object('id','50000000-0000-0000-0000-000000000001','version',2,'box_id','30000000-0000-0000-0000-000000000001','row',11,'col',1),
+  jsonb_build_object('id','50000000-0000-0000-0000-000000000002','version',2,'box_id','30000000-0000-0000-0000-000000000001','row',1,'col',3)))$q$,
+  '%already occupied%');
+select test.expect((select count(*) = 2 from samples s join boxes b on b.id = s.box_id where b.name = 'A10' and s.sample_name in ('M1','M2')),
+  'a failed bulk move leaves every sample where it was');
+select test.expect_error($q$select * from move_samples(jsonb_build_array(
+  jsonb_build_object('id','50000000-0000-0000-0000-000000000001','version',2,'box_id','30000000-0000-0000-0000-000000000001','row',12,'col',1),
+  jsonb_build_object('id','50000000-0000-0000-0000-000000000002','version',2,'box_id','30000000-0000-0000-0000-000000000001','row',12,'col',1)))$q$,
+  '%same position%');
+select test.expect_error($q$select * from move_samples(jsonb_build_array(
+  jsonb_build_object('id','50000000-0000-0000-0000-000000000001','version',1,'box_id','30000000-0000-0000-0000-000000000001','row',12,'col',1)))$q$,
+  '%changed by someone else%');
+
 reset role;
 \echo
 \echo 'ALL DATABASE TESTS PASSED'

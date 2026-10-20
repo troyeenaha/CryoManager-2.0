@@ -109,7 +109,7 @@ export async function searchSamples({
   const t = clean(term);
   if (t) {
     const fields = [
-      'sample_name', 'sample_code', 'grid_name', 'position', 'transfected_with', 'tank_name', 'rack_name', 'box_name',
+      'sample_name', 'sample_code', 'grid_name', 'position', 'transfected_with', 'tank_name', 'rack_name', 'box_name', 'box_label',
       'researcher_responsible', 'passaged_by', 'media', 'project', 'cell_line_origin',
       'genetic_modifications', 'selection_marker', 'notes',
     ].map((f) => `${f}.ilike."*${t}*"`);
@@ -161,6 +161,30 @@ export async function saveRow(table, { id, version, ...values }) {
 /** Adds several samples in one statement: all are saved, or none are. */
 export async function insertSamples(rows) {
   return unwrap(await supabase.from('samples').insert(rows).select());
+}
+
+/**
+ * Moves several samples in one transaction (all or nothing).
+ * moves: [{ sample, boxId, row, col }]
+ */
+export async function moveSamples(moves) {
+  return unwrap(
+    await supabase.rpc('move_samples', {
+      p_moves: moves.map((m) => ({ id: m.sample.id, version: m.sample.version, box_id: m.boxId, row: m.row, col: m.col })),
+    }),
+  );
+}
+
+/** Takes several samples out of storage in one statement (all or nothing). */
+export async function takeOutSamples(samples, status, reason) {
+  const ids = samples.map((s) => s.id);
+  const rows = unwrap(
+    await supabase.from('samples').update({ status, archive_reason: reason }).in('id', ids).eq('status', 'active').select('id'),
+  );
+  if (rows.length !== ids.length) {
+    throw new Error(`${ids.length - rows.length} of the samples had already been changed by someone else. Refresh and check.`);
+  }
+  return rows;
 }
 
 export async function deleteRow(table, id) {

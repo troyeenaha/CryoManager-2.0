@@ -48,6 +48,9 @@ export function rackShade(rackColorId, index = 1, count = 1) {
 /** Color for any row that carries rack_color / shade_index / shade_count. */
 export const boxColorOf = (row) => rackShade(row?.rack_color || row?.color || 'blue', row?.shade_index, row?.shade_count);
 
+/** "A1" or "A1 · Troyee 1" when the box has a nickname. */
+export const boxDisplay = (b) => (b?.label ? `${b.name} · ${b.label}` : b?.name ?? '');
+
 export const GRID_PRESETS = [
   { label: '9 × 9 (81)', rows: 9, cols: 9 },
   { label: '10 × 10 (100)', rows: 10, cols: 10 },

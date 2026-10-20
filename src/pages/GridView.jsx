@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronRight, Grid3x3, Lightbulb, ListChecks, Plus, Printer, X } from 'lucide-react';
+import { ArrowRightLeft, ChevronRight, Grid3x3, Lightbulb, ListChecks, MousePointerClick, PackageOpen, Plus, Printer, X } from 'lucide-react';
 import { moveSample, useBoxSamples, useBoxes, useInventoryMutation } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import SampleForm from '../components/SampleForm.jsx';
-import { MoveDialog, RemoveDialog, SampleDetails } from '../components/SampleDetails.jsx';
+import { RemoveDialog, SampleDetails, TransferDialog } from '../components/SampleDetails.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { friendlyError } from '../lib/errors.js';
-import { boxColorOf, fmtPct, parsePosition, pct, positionLabel, rowLabel } from '../lib/grid.js';
+import { boxColorOf, boxDisplay, fmtPct, parsePosition, pct, positionLabel, rowLabel } from '../lib/grid.js';
 import { fmtDate, yesNo } from '../lib/format.js';
 import { Button, Card, EmptyState, ErrorState, ProgressBar, Select, Spinner, cx } from '../components/ui.jsx';
 
@@ -36,10 +36,12 @@ function Tips({ canEdit }) {
   const tips = canEdit
     ? [
       ['Add one sample', 'click any empty (dashed) square.'],
-      ['Add the same sample to several squares', 'click Select several, click the squares (or a row letter to pick its whole row), then Fill.'],
-      ['Move a sample in this box', 'drag it onto an empty square. To move it to another box, click it and choose Move.'],
+      ['Add the same sample to several squares', 'click Fill several squares, pick the squares (or a row letter for a whole row), then Fill.'],
+      ['Move within this box', 'drag a sample onto an empty square.'],
+      ['Move or take out several samples', 'click Select samples, pick them, then Move to another box or Take out.'],
       ['See details', 'hover over a sample; click it to view, edit, move or take it out.'],
       ['Grid names', 'are box + position, e.g. A1B4 = box A1, row B, column 4.'],
+      ['Sample IDs', '(S-000001…) are permanent and never change, even when a vial moves.'],
     ]
     : [
       ['See details', 'hover over a sample, or click it for everything including its history.'],
@@ -84,7 +86,6 @@ function Tooltip({ hover, boxName }) {
         <dt className="text-slate-500">Who Passaged</dt><dd className="truncate font-semibold">{s.passaged_by || '—'}</dd>
         <dt className="text-slate-500">Date</dt><dd>{fmtDate(s.passage_date)}</dd>
         <dt className="text-slate-500">Freezing Media</dt><dd className="truncate">{s.media || '—'}</dd>
-        {s.vial_count > 1 && (<><dt className="text-slate-500">Vials</dt><dd>{s.vial_count}</dd></>)}
       </dl>
     </div>
   );
@@ -92,7 +93,7 @@ function Tooltip({ hover, boxName }) {
 
 // ------------------------------------------------------------------ grid
 
-function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onToggle, onToggleRow, onEmpty, onSample, onDropMove }) {
+function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, picked, onToggle, onToggleRow, onPick, onEmpty, onSample, onDropMove }) {
   const [hover, setHover] = useState(null);
   const [dragging, setDragging] = useState(null); // sample being dragged
   const [over, setOver] = useState(null); // cell key under the dragged sample
@@ -125,7 +126,7 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
         ref={gridRef}
         role="grid"
         aria-label={`Box ${box.name} grid, ${box.rows} rows by ${box.cols} columns`}
-        aria-multiselectable={selecting || undefined}
+        aria-multiselectable={Boolean(selecting) || undefined}
         onKeyDown={onKeyDown}
         className="grid gap-1.5 w-max mx-auto"
         style={{ gridTemplateColumns: `1.75rem repeat(${box.cols}, ${cell})` }}
@@ -141,7 +142,7 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
               {selecting ? (
                 <button
                   onClick={() => onToggleRow(r)}
-                  title={`Select empty squares in row ${rowLabel(r)}`}
+                  title={selecting === 'samples' ? `Select all samples in row ${rowLabel(r)}` : `Select empty squares in row ${rowLabel(r)}`}
                   className="flex items-center justify-center rounded-md text-xs font-semibold text-brand-700 hover:bg-brand-50"
                 >
                   {rowLabel(r)}
@@ -159,6 +160,7 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
 
                 if (s) {
                   const isDragged = dragging?.id === s.id;
+                  const isPicked = picked.has(s.id);
                   return (
                     <button
                       key={c}
@@ -172,7 +174,8 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
                         setDragging(s);
                       }}
                       onDragEnd={() => { setDragging(null); setOver(null); }}
-                      onClick={() => !selecting && onSample(s)}
+                      aria-selected={selecting === 'samples' ? isPicked : undefined}
+                      onClick={() => (selecting === 'samples' ? onPick(s) : !selecting && onSample(s))}
                       onMouseEnter={(e) => !dragging && setHover({ sample: s, rect: e.currentTarget.getBoundingClientRect() })}
                       onMouseLeave={() => setHover(null)}
                       onFocus={(e) => setHover({ sample: s, rect: e.currentTarget.getBoundingClientRect() })}
@@ -180,7 +183,9 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
                       aria-label={`${gridName}: ${s.sample_name}`}
                       className={cx(
                         'relative aspect-square rounded-lg border-2 px-0.5 flex flex-col items-center justify-center overflow-hidden transition-all duration-150',
-                        selecting ? 'opacity-40 cursor-not-allowed' : 'hover:-translate-y-px hover:shadow-md',
+                        selecting === 'empty' ? 'opacity-40 cursor-not-allowed' : 'hover:-translate-y-px hover:shadow-md',
+                        selecting === 'samples' && !isPicked && 'opacity-60',
+                        isPicked && 'ring-4 ring-brand-700 ring-offset-2 opacity-100',
                         canDrag && 'cursor-grab active:cursor-grabbing',
                         isDragged && 'opacity-40 scale-95',
                         isHi && 'ring-4 ring-amber-400 ring-offset-1',
@@ -190,8 +195,8 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
                       <span className="text-[9px] leading-none opacity-80">{pos}</span>
                       <span className="mt-0.5 text-[10px] font-semibold leading-tight text-center line-clamp-2 break-words">{s.sample_name}</span>
                       {s.passaged_by && <span className="text-[8px] leading-none opacity-80 mt-0.5">{s.passaged_by}</span>}
-                      {s.vial_count > 1 && (
-                        <span className="absolute top-0.5 right-0.5 rounded bg-white/90 text-slate-800 text-[8px] font-bold px-0.5 leading-tight">×{s.vial_count}</span>
+                      {isPicked && (
+                        <span className="absolute top-0.5 right-0.5 rounded-full bg-white text-brand-800 text-[9px] font-bold h-3.5 w-3.5 flex items-center justify-center leading-none">✓</span>
                       )}
                     </button>
                   );
@@ -204,10 +209,11 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
                     key={c}
                     role="gridcell"
                     data-pos={k}
-                    aria-selected={selecting ? isSel : undefined}
+                    aria-selected={selecting === 'empty' ? isSel : undefined}
                     disabled={!canEdit}
                     onClick={(e) => {
-                      if (selecting || e.shiftKey) onToggle(r, c);
+                      if (selecting === 'samples') return;
+                      if (selecting === 'empty' || e.shiftKey) onToggle(r, c);
                       else onEmpty(r, c);
                     }}
                     onDragOver={(e) => {
@@ -224,8 +230,8 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, onTogg
                       setOver(null);
                       if (s2) onDropMove(s2, r, c);
                     }}
-                    aria-label={`${gridName}: empty${canEdit ? (selecting ? (isSel ? ', selected' : ', click to select') : ', add sample') : ''}`}
-                    title={canEdit ? (selecting ? `Select ${gridName}` : `Add sample at ${gridName}`) : `${gridName} (empty)`}
+                    aria-label={`${gridName}: empty${canEdit ? (selecting === 'empty' ? (isSel ? ', selected' : ', click to select') : selecting ? '' : ', add sample') : ''}`}
+                    title={canEdit ? (selecting === 'empty' ? `Select ${gridName}` : selecting ? gridName : `Add sample at ${gridName}`) : `${gridName} (empty)`}
                     className={cx(
                       'group aspect-square rounded-lg border-2 flex flex-col items-center justify-center transition-all duration-150',
                       isSel
@@ -267,8 +273,9 @@ export default function GridViewPage() {
   const box = (boxesQ.data || []).find((b) => b.id === boxId);
   const samplesQ = useBoxSamples(box?.id);
   const [dialog, setDialog] = useState(null); // {type, ...}
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState(() => new Set());
+  const [selecting, setSelecting] = useState(null); // null | 'empty' | 'samples'
+  const [selected, setSelected] = useState(() => new Set()); // empty square keys
+  const [picked, setPicked] = useState(() => new Set()); // sample ids
   const highlight = useMemo(() => parsePosition(params.get('pos')), [params]);
   const move = useInventoryMutation(moveSample);
 
@@ -277,7 +284,7 @@ export default function GridViewPage() {
   }, [boxId, activeBoxes, navigate]);
 
   // Leaving a box clears any selection.
-  useEffect(() => { setSelecting(false); setSelected(new Set()); }, [boxId]);
+  useEffect(() => { setSelecting(null); setSelected(new Set()); setPicked(new Set()); }, [boxId]);
 
   // Drop selections that someone else has since filled.
   const samples = useMemo(() => samplesQ.data || [], [samplesQ.data]);
@@ -285,6 +292,11 @@ export default function GridViewPage() {
     const taken = new Set(samples.map((s) => key(s.row_num, s.col_num)));
     setSelected((prev) => {
       const next = new Set([...prev].filter((k) => !taken.has(k)));
+      return next.size === prev.size ? prev : next;
+    });
+    const ids = new Set(samples.map((s) => s.id));
+    setPicked((prev) => {
+      const next = new Set([...prev].filter((id) => ids.has(id)));
       return next.size === prev.size ? prev : next;
     });
   }, [samples]);
@@ -313,14 +325,29 @@ export default function GridViewPage() {
 
   const toggle = (r, c) => {
     if (occupied.has(key(r, c))) return;
-    setSelecting(true);
+    setSelecting('empty');
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key(r, c))) next.delete(key(r, c)); else next.add(key(r, c));
       return next;
     });
   };
+  const pick = (s) => setPicked((prev) => {
+    const next = new Set(prev);
+    if (next.has(s.id)) next.delete(s.id); else next.add(s.id);
+    return next;
+  });
   const toggleRow = (r) => {
+    if (selecting === 'samples') {
+      const inRow = samples.filter((s) => s.row_num === r).map((s) => s.id);
+      setPicked((prev) => {
+        const next = new Set(prev);
+        const all = inRow.every((id) => next.has(id));
+        inRow.forEach((id) => (all ? next.delete(id) : next.add(id)));
+        return next;
+      });
+      return;
+    }
     const empties = Array.from({ length: box.cols }, (_, i) => key(r, i + 1)).filter((k) => !occupied.has(k));
     setSelected((prev) => {
       const next = new Set(prev);
@@ -329,7 +356,10 @@ export default function GridViewPage() {
       return next;
     });
   };
-  const stopSelecting = () => { setSelecting(false); setSelected(new Set()); };
+  const stopSelecting = () => { setSelecting(null); setSelected(new Set()); setPicked(new Set()); };
+  const pickedSamples = samples
+    .filter((s) => picked.has(s.id))
+    .sort((a, b) => a.row_num - b.row_num || a.col_num - b.col_num);
   const selectedPositions = [...selected]
     .map((k) => { const [row, col] = k.split('-').map(Number); return { row, col }; })
     .sort((a, b) => a.row - b.row || a.col - b.col);
@@ -358,6 +388,7 @@ export default function GridViewPage() {
             <span className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full" style={{ background: color.fill }} />
               {box.name}
+              {box.label && <span className="text-lg font-normal text-slate-500">· {box.label}</span>}
             </span>
           </nav>
           <p className="text-sm text-slate-500 mt-1">{box.rows} × {box.cols} grid · rows A–{rowLabel(box.rows)}, columns 1–{box.cols}</p>
@@ -365,7 +396,7 @@ export default function GridViewPage() {
         <div className="flex gap-2 no-print">
           <Select aria-label="Select box" value={box.id} onChange={(e) => navigate(`/grid/${e.target.value}`)} className="sm:w-72">
             {activeBoxes.map((b) => (
-              <option key={b.id} value={b.id}>{b.tank_name} › {b.rack_name} › {b.name}</option>
+              <option key={b.id} value={b.id}>{b.tank_name} › {b.rack_name} › {boxDisplay(b)}</option>
             ))}
           </Select>
           <Button variant="secondary" size="icon" onClick={() => window.print()} aria-label="Print box map" title="Print box map">
@@ -400,10 +431,10 @@ export default function GridViewPage() {
             'no-print mb-4 flex flex-wrap items-center gap-3 rounded-lg px-3 py-2.5',
             selecting ? 'bg-brand-50 border border-brand-100' : '',
           )}>
-            {selecting ? (
+            {selecting === 'empty' && (
               <>
                 <div className="text-sm text-slate-700 flex-1 min-w-48">
-                  <span className="font-semibold text-brand-800">{selected.size} selected.</span>{' '}
+                  <span className="font-semibold text-brand-800">{selected.size} square{selected.size === 1 ? '' : 's'} selected.</span>{' '}
                   Click empty squares, or a row letter to select that whole row.
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} disabled={!selected.size}>Clear</Button>
@@ -412,12 +443,32 @@ export default function GridViewPage() {
                   <Plus className="h-4 w-4" /> Fill {selected.size || ''} position{selected.size === 1 ? '' : 's'}
                 </Button>
               </>
-            ) : (
+            )}
+            {selecting === 'samples' && (
               <>
-                <Button variant="secondary" size="sm" onClick={() => setSelecting(true)} disabled={filled >= total}>
-                  <ListChecks className="h-4 w-4" /> Select several
+                <div className="text-sm text-slate-700 flex-1 min-w-48">
+                  <span className="font-semibold text-brand-800">{picked.size} sample{picked.size === 1 ? '' : 's'} selected.</span>{' '}
+                  Click samples, or a row letter to select a whole row.
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())} disabled={!picked.size}>Clear</Button>
+                <Button variant="secondary" size="sm" onClick={stopSelecting}>Cancel</Button>
+                <Button variant="secondary" size="sm" disabled={!picked.size} onClick={() => setDialog({ type: 'remove', samples: pickedSamples })}>
+                  <PackageOpen className="h-4 w-4" /> Take out
                 </Button>
-                <span className="text-xs text-slate-500">Fill many squares with the same sample at once · drag a sample to move it</span>
+                <Button size="sm" disabled={!picked.size} onClick={() => setDialog({ type: 'transfer', samples: pickedSamples })}>
+                  <ArrowRightLeft className="h-4 w-4" /> Move to another box
+                </Button>
+              </>
+            )}
+            {!selecting && (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setSelecting('empty')} disabled={filled >= total}>
+                  <ListChecks className="h-4 w-4" /> Fill several squares
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setSelecting('samples')} disabled={!filled}>
+                  <MousePointerClick className="h-4 w-4" /> Select samples
+                </Button>
+                <span className="text-xs text-slate-500">Select samples to move or take out several at once · drag a sample to move it within this box</span>
               </>
             )}
           </div>
@@ -431,6 +482,8 @@ export default function GridViewPage() {
             highlight={highlight}
             selecting={selecting}
             selected={selected}
+            picked={picked}
+            onPick={pick}
             onToggle={toggle}
             onToggleRow={toggleRow}
             onEmpty={(row, col) => setDialog({ type: 'add', positions: [{ row, col }] })}
@@ -441,7 +494,7 @@ export default function GridViewPage() {
         <div className="mt-5 flex flex-wrap gap-5 text-xs text-slate-500 no-print">
           <span className="flex items-center gap-2"><span className="h-4 w-4 rounded border-2 border-dashed border-slate-300 bg-slate-50" /> Empty{canEdit && ' — click to add'}</span>
           <span className="flex items-center gap-2"><span className="h-4 w-4 rounded" style={{ background: color.fill }} /> Occupied — click for details{canEdit && ', drag to move'}</span>
-          <span className="flex items-center gap-2"><span className="rounded bg-slate-100 px-1 font-bold text-[9px]">×3</span> Several vials in one slot</span>
+          <span>One square = one vial</span>
         </div>
       </Card>
 
@@ -467,10 +520,19 @@ export default function GridViewPage() {
         <SampleForm box={box} sample={dialog.sample} onClose={close} />
       )}
       {dialog?.type === 'move' && (
-        <MoveDialog sample={dialog.sample} fromBox={box} onClose={close} onMoved={close} />
+        <TransferDialog samples={[dialog.sample]} fromBox={box} onClose={close} onMoved={close} />
+      )}
+      {dialog?.type === 'transfer' && (
+        <TransferDialog samples={dialog.samples} fromBox={box} onClose={close} onMoved={() => { close(); stopSelecting(); }} />
       )}
       {dialog?.type === 'remove' && (
-        <RemoveDialog sample={dialog.sample} onClose={close} onDone={close} />
+        <RemoveDialog
+          samples={dialog.samples || [dialog.sample]}
+          fromBox={box}
+          onClose={close}
+          onDone={() => { close(); stopSelecting(); }}
+          onMoveInstead={() => setDialog({ type: 'transfer', samples: dialog.samples || [dialog.sample] })}
+        />
       )}
     </>
   );
