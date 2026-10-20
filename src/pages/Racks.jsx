@@ -1,18 +1,57 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Archive, ArchiveRestore, Boxes as BoxesIcon, LayoutList, Pencil, Plus, Trash2 } from 'lucide-react';
-import { deleteRow, saveRow, useInventoryMutation, useRacks, useTanks } from '../api/data.js';
+import { deleteRow, saveRow, useBoxes, useInventoryMutation, useRacks, useTanks } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { useFormSubmit } from '../components/useFormSubmit.js';
 import { friendlyError } from '../lib/errors.js';
-import { RACK_COLORS, boxColor, pct, rackShade } from '../lib/grid.js';
+import { RACK_COLORS, boxColor, boxColorOf, pct, rackShade } from '../lib/grid.js';
 import {
   Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, Menu, Modal, PageHeader,
   ProgressBar, SearchInput, Select, Spinner, StatusBadge, Textarea, cx,
 } from '../components/ui.jsx';
 
-function RackForm({ rack, tanks, defaultTankId, onClose }) {
+/** A small drawing of the rack: slot 1 at the top (A1) down to the last slot (A12). */
+function RackSchematic({ rack, boxes, onOpenBox }) {
+  const inRack = boxes
+    .filter((b) => b.rack_id === rack.id && b.status !== 'archived')
+    .sort((a, b) => (a.shade_index || 0) - (b.shade_index || 0));
+  const slots = Math.max(rack.box_capacity, inRack.length);
+  const h = slots > 16 ? 'h-2.5' : slots > 12 ? 'h-3.5' : 'h-[18px]';
+  return (
+    <div className="w-28 shrink-0 select-none" aria-label={`Rack ${rack.name}: ${inRack.length} of ${rack.box_capacity} slots used, top to bottom`}>
+      <div className="text-[10px] text-center text-slate-400 mb-1">top</div>
+      <div className="rounded-md border-2 border-slate-300 bg-slate-50 p-1 relative">
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-2 w-8 rounded-t-md border-2 border-b-0 border-slate-300 bg-white" aria-hidden="true" />
+        <div className="flex flex-col gap-[3px]">
+          {Array.from({ length: slots }, (_, i) => {
+            const b = inRack[i];
+            if (!b) {
+              return <div key={i} className={cx(h, 'rounded-[3px] border border-dashed border-slate-300 bg-white')} title={`Slot ${i + 1}: empty`} />;
+            }
+            const c = boxColorOf(b);
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onOpenBox(b); }}
+                title={`Slot ${i + 1}: Box ${b.name}${b.label ? ` · ${b.label}` : ''} (${b.filled_positions}/${b.total_positions})`}
+                className={cx(h, 'rounded-[3px] px-1 text-[9px] font-semibold leading-none flex items-center justify-between gap-1 overflow-hidden hover:ring-2 hover:ring-slate-400 transition')}
+                style={{ background: c.fill, color: c.text }}
+              >
+                {slots <= 16 && <><span className="truncate">{b.name}</span><span className="opacity-80 font-normal">{b.filled_positions}</span></>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="text-[10px] text-center text-slate-400 mt-1">bottom</div>
+    </div>
+  );
+}
+
+function RackForm({ rack, tanks, allRacks, defaultTankId, onClose }) {
   const isNew = !rack?.id;
   const [form, setForm] = useState({
     tank_id: rack?.tank_id ?? defaultTankId ?? '',
@@ -28,6 +67,9 @@ function RackForm({ rack, tanks, defaultTankId, onClose }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const selectable = tanks.filter((t) => t.status !== 'archived' || t.id === rack?.tank_id);
+  const chosenColor = form.color;
+  const sameTank = (allRacks || []).filter((r) => r.tank_id === form.tank_id && r.status !== 'archived' && r.id !== rack?.id);
+  const clash = sameTank.filter((r) => r.color === chosenColor);
   const tank = tanks.find((t) => t.id === form.tank_id);
   const full = tank && isNew && tank.rack_count >= tank.rack_capacity;
   const errors = {
@@ -49,7 +91,7 @@ function RackForm({ rack, tanks, defaultTankId, onClose }) {
         name: form.name.trim(),
         position: form.position === '' ? null : Number(form.position),
         box_capacity: Number(form.box_capacity),
-        color: form.color,
+        color: chosenColor,
         notes: form.notes.trim(),
       }),
       { success: (r) => `Rack "${r.name}" ${isNew ? 'added' : 'saved'}.`, onDone: onClose },
@@ -86,7 +128,7 @@ function RackForm({ rack, tanks, defaultTankId, onClose }) {
         <Field label="Box Capacity" required error={touched && errors.box_capacity}>
           <Input type="number" min={1} max={100} value={form.box_capacity} onChange={set('box_capacity')} />
         </Field>
-        <Field label="Rack Color" hint="Boxes in this rack show shades of this color, light to dark">
+        <Field label="Rack Color" hint="Each box in this rack gets a shade of this color, from light (first box) to dark (last box)">
           <div>
             <div role="radiogroup" aria-label="Rack color" className="flex flex-wrap gap-2">
               {RACK_COLORS.map((c) => (
@@ -94,16 +136,21 @@ function RackForm({ rack, tanks, defaultTankId, onClose }) {
                   key={c.id}
                   type="button"
                   role="radio"
-                  aria-checked={form.color === c.id}
+                  aria-checked={chosenColor === c.id}
                   aria-label={c.label}
-                  title={c.label}
+                  title={`${c.label}${sameTank.some((r) => r.color === c.id) ? ` (used by Rack ${sameTank.filter((r) => r.color === c.id).map((r) => r.name).join(', ')})` : ''}`}
                   onClick={() => setForm((f) => ({ ...f, color: c.id }))}
-                  className={cx('h-8 w-8 rounded-full ring-offset-2 transition', form.color === c.id ? 'ring-2 ring-slate-800' : 'hover:scale-110')}
-                  style={{ background: c.fill }}
+                  className={cx('h-8 w-8 rounded-full ring-offset-2 transition', chosenColor === c.id ? 'ring-2 ring-slate-800' : 'hover:scale-110')}
+                  style={{ background: c.fill, opacity: sameTank.some((r) => r.color === c.id) && chosenColor !== c.id ? 0.35 : 1 }}
                 />
               ))}
             </div>
-            <div className="mt-3 h-3 rounded-full" style={{ background: `linear-gradient(90deg, ${rackShade(form.color, 1, 3).fill}, ${rackShade(form.color, 2, 3).fill}, ${rackShade(form.color, 3, 3).fill})` }} aria-hidden="true" />
+            {clash.length > 0 ? (
+              <p className="mt-2 text-xs text-amber-700">Rack {clash.map((r) => r.name).join(', ')} in this tank already uses {boxColor(chosenColor).label}. Pick a different color if you want them to look different.</p>
+            ) : (
+              sameTank.length > 0 && <p className="mt-2 text-xs text-slate-500">Faded colors are already used by other racks in this tank.</p>
+            )}
+            <div className="mt-3 h-3 rounded-full" style={{ background: `linear-gradient(90deg, ${rackShade(chosenColor, 1, 3).fill}, ${rackShade(chosenColor, 2, 3).fill}, ${rackShade(chosenColor, 3, 3).fill})` }} aria-hidden="true" />
           </div>
         </Field>
         <Field label="Notes">
@@ -122,6 +169,7 @@ export default function RacksPage() {
   const tankFilter = params.get('tank') || '';
   const tanksQ = useTanks();
   const racksQ = useRacks();
+  const boxesQ = useBoxes();
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -219,14 +267,22 @@ export default function RacksPage() {
                   />
                 </div>
               </div>
-              <div className="mt-4 h-2 rounded-full" aria-hidden="true" style={{ background: `linear-gradient(90deg, ${rackShade(r.color, 1, 3).fill}, ${rackShade(r.color, 2, 3).fill}, ${rackShade(r.color, 3, 3).fill})` }} />
-              {r.notes && <p className="mt-3 text-sm text-slate-500 line-clamp-2">{r.notes}</p>}
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="flex items-center gap-1.5 text-slate-500"><BoxesIcon className="h-4 w-4" /> Boxes</span>
-                  <span className="font-medium text-slate-900">{r.box_count} / {r.box_capacity}</span>
+              <div className="mt-4 flex gap-4">
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded-full" style={{ background: boxColor(r.color).fill }} /> {boxColor(r.color).label}
+                  </div>
+                  {r.notes && <p className="mt-2 text-sm text-slate-500 line-clamp-3">{r.notes}</p>}
+                  <p className="mt-2 text-xs text-slate-400">Click a box in the drawing to open its grid.</p>
+                  <div className="mt-auto pt-3">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="flex items-center gap-1.5 text-slate-500"><BoxesIcon className="h-4 w-4" /> Boxes</span>
+                      <span className="font-medium text-slate-900">{r.box_count} / {r.box_capacity}</span>
+                    </div>
+                    <ProgressBar value={pct(r.box_count, r.box_capacity)} />
+                  </div>
                 </div>
-                <ProgressBar value={pct(r.box_count, r.box_capacity)} />
+                <RackSchematic rack={r} boxes={boxesQ.data || []} onOpenBox={(b) => navigate(`/grid/${b.id}`)} />
               </div>
             </Card>
           ))}
@@ -234,7 +290,7 @@ export default function RacksPage() {
       )}
 
       {editing && (
-        <RackForm key={editing.id || 'new'} rack={editing} tanks={tanks} defaultTankId={tankFilter} onClose={() => setEditing(null)} />
+        <RackForm key={editing.id || 'new'} rack={editing} tanks={tanks} allRacks={racksQ.data || []} defaultTankId={tankFilter} onClose={() => setEditing(null)} />
       )}
 
       <ConfirmDialog
