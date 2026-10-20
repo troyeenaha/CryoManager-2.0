@@ -1,0 +1,235 @@
+import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Archive, ArchiveRestore, Boxes as BoxesIcon, LayoutList, Pencil, Plus, Trash2 } from 'lucide-react';
+import { deleteRow, saveRow, useInventoryMutation, useRacks, useTanks } from '../api/data.js';
+import { useAuth } from '../auth/AuthProvider.jsx';
+import { useToast } from '../components/Toast.jsx';
+import { useFormSubmit } from '../components/useFormSubmit.js';
+import { friendlyError } from '../lib/errors.js';
+import { pct } from '../lib/grid.js';
+import {
+  Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, Menu, Modal, PageHeader,
+  ProgressBar, SearchInput, Select, Spinner, StatusBadge, Textarea,
+} from '../components/ui.jsx';
+
+function RackForm({ rack, tanks, defaultTankId, onClose }) {
+  const isNew = !rack?.id;
+  const [form, setForm] = useState({
+    tank_id: rack?.tank_id ?? defaultTankId ?? '',
+    name: rack?.name ?? '',
+    position: rack?.position ?? '',
+    box_capacity: rack?.box_capacity ?? 12,
+    notes: rack?.notes ?? '',
+  });
+  const [touched, setTouched] = useState(false);
+  const { run, busy, error } = useFormSubmit();
+  const save = useInventoryMutation((v) => saveRow('racks', v));
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const selectable = tanks.filter((t) => t.status !== 'archived' || t.id === rack?.tank_id);
+  const tank = tanks.find((t) => t.id === form.tank_id);
+  const full = tank && isNew && tank.rack_count >= tank.rack_capacity;
+  const errors = {
+    tank_id: !form.tank_id && 'Choose a tank.',
+    name: !form.name.trim() && 'Rack name is required.',
+    box_capacity: !(Number(form.box_capacity) >= 1 && Number(form.box_capacity) <= 100) && 'Enter 1–100.',
+    position: form.position !== '' && !(Number(form.position) >= 1) && 'Must be 1 or more.',
+  };
+
+  function submit(e) {
+    e.preventDefault();
+    setTouched(true);
+    if (Object.values(errors).some(Boolean)) return;
+    run(
+      () => save.mutateAsync({
+        id: rack?.id,
+        version: rack?.version,
+        tank_id: form.tank_id,
+        name: form.name.trim(),
+        position: form.position === '' ? null : Number(form.position),
+        box_capacity: Number(form.box_capacity),
+        notes: form.notes.trim(),
+      }),
+      { success: (r) => `Rack "${r.name}" ${isNew ? 'added' : 'saved'}.`, onDone: onClose },
+    );
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      busy={busy}
+      title={isNew ? 'Add New Rack' : 'Edit Rack'}
+      footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" form="rack-form" loading={busy}>Save</Button></>}
+    >
+      <form id="rack-form" onSubmit={submit} className="space-y-4" noValidate>
+        {error && <Alert tone="error">{error}</Alert>}
+        {full && <Alert tone="warning">{tank.name} is full ({tank.rack_count} / {tank.rack_capacity} racks). Increase its capacity or choose another tank.</Alert>}
+        <Field label="Tank" required error={touched && errors.tank_id}>
+          <Select value={form.tank_id} onChange={set('tank_id')}>
+            <option value="">Select a tank…</option>
+            {selectable.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({t.rack_count}/{t.rack_capacity} racks)</option>
+            ))}
+          </Select>
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Rack Name" required error={touched && errors.name} hint="Unique within its tank">
+            <Input value={form.name} onChange={set('name')} placeholder="e.g. A" maxLength={40} />
+          </Field>
+          <Field label="Position in Tank" error={touched && errors.position} hint="Optional slot number">
+            <Input type="number" min={1} value={form.position} onChange={set('position')} />
+          </Field>
+        </div>
+        <Field label="Box Capacity" required error={touched && errors.box_capacity}>
+          <Input type="number" min={1} max={100} value={form.box_capacity} onChange={set('box_capacity')} />
+        </Field>
+        <Field label="Notes">
+          <Textarea value={form.notes} onChange={set('notes')} maxLength={2000} />
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
+export default function RacksPage() {
+  const { isAdmin } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const tankFilter = params.get('tank') || '';
+  const tanksQ = useTanks();
+  const racksQ = useRacks();
+  const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const mutate = useInventoryMutation(async ({ type, rack }) => {
+    if (type === 'delete') return deleteRow('racks', rack.id);
+    return saveRow('racks', { id: rack.id, version: rack.version, status: type === 'archive' ? 'archived' : 'active' });
+  });
+
+  const tanks = tanksQ.data || [];
+  const racks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (racksQ.data || [])
+      .filter((r) => showArchived || r.status !== 'archived')
+      .filter((r) => !tankFilter || r.tank_id === tankFilter)
+      .filter((r) => !q || r.name.toLowerCase().includes(q) || r.tank_name.toLowerCase().includes(q) || (r.notes || '').toLowerCase().includes(q));
+  }, [racksQ.data, search, showArchived, tankFilter]);
+
+  async function doConfirm() {
+    try {
+      await mutate.mutateAsync(confirm);
+      toast.success(`Rack "${confirm.rack.name}" ${{ delete: 'deleted', archive: 'archived', restore: 'restored' }[confirm.type]}.`);
+    } catch (err) {
+      toast.error(friendlyError(err));
+    }
+    setConfirm(null);
+  }
+
+  const loading = tanksQ.isLoading || racksQ.isLoading;
+  const err = tanksQ.error || racksQ.error;
+
+  return (
+    <>
+      <PageHeader
+        title="Racks"
+        subtitle="Racks inside each tank"
+        actions={isAdmin && <Button onClick={() => setEditing({})} disabled={!tanks.length}><Plus className="h-4 w-4" /> Add Rack</Button>}
+      />
+      <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:items-center">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search racks" className="sm:max-w-xs flex-1" />
+        <Select
+          aria-label="Filter by tank"
+          value={tankFilter}
+          onChange={(e) => setParams(e.target.value ? { tank: e.target.value } : {})}
+          className="sm:max-w-56"
+        >
+          <option value="">All tanks</option>
+          {tanks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </Select>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-brand-700 h-4 w-4" />
+          Show archived
+        </label>
+      </div>
+
+      {loading ? <Spinner /> : err ? <ErrorState error={err} onRetry={() => { tanksQ.refetch(); racksQ.refetch(); }} /> : racks.length === 0 ? (
+        <EmptyState
+          icon={LayoutList}
+          title={search || tankFilter ? 'No racks match' : 'No racks yet'}
+          action={isAdmin && tanks.length > 0 && <Button onClick={() => setEditing({})}><Plus className="h-4 w-4" /> Add Rack</Button>}
+        >
+          {!tanks.length ? 'Add a tank first, then add racks to it.' : null}
+        </EmptyState>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {racks.map((r) => (
+            <Card
+              key={r.id}
+              tabIndex={0}
+              role="link"
+              aria-label={`Open rack ${r.name}`}
+              onClick={() => navigate(`/boxes?rack=${r.id}`)}
+              onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && navigate(`/boxes?rack=${r.id}`)}
+              className="p-5 cursor-pointer transition-all hover:shadow-md hover:border-slate-300"
+            >
+              <div className="flex items-start gap-3">
+                <div className="h-11 w-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-blue-700 font-semibold">
+                  {r.name.slice(0, 3)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-slate-500 truncate">{r.tank_name}{r.position ? ` · slot ${r.position}` : ''}</div>
+                  <h3 className="font-semibold text-slate-900 truncate">Rack {r.name}</h3>
+                  <div className="mt-1"><StatusBadge status={r.status} /></div>
+                </div>
+                <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                  <Menu
+                    label={`Actions for rack ${r.name}`}
+                    items={isAdmin ? [
+                      { label: 'Edit', icon: Pencil, onClick: () => setEditing(r) },
+                      r.status === 'archived'
+                        ? { label: 'Restore', icon: ArchiveRestore, onClick: () => setConfirm({ type: 'restore', rack: r }) }
+                        : { label: 'Archive', icon: Archive, onClick: () => setConfirm({ type: 'archive', rack: r }) },
+                      { label: 'Delete', icon: Trash2, danger: true, onClick: () => setConfirm({ type: 'delete', rack: r }) },
+                    ] : []}
+                  />
+                </div>
+              </div>
+              {r.notes && <p className="mt-3 text-sm text-slate-500 line-clamp-2">{r.notes}</p>}
+              <div className="mt-4 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="flex items-center gap-1.5 text-slate-500"><BoxesIcon className="h-4 w-4" /> Boxes</span>
+                  <span className="font-medium text-slate-900">{r.box_count} / {r.box_capacity}</span>
+                </div>
+                <ProgressBar value={pct(r.box_count, r.box_capacity)} />
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <RackForm key={editing.id || 'new'} rack={editing} tanks={tanks} defaultTankId={tankFilter} onClose={() => setEditing(null)} />
+      )}
+
+      <ConfirmDialog
+        open={Boolean(confirm)}
+        onClose={() => setConfirm(null)}
+        onConfirm={doConfirm}
+        busy={mutate.isPending}
+        tone={confirm?.type === 'restore' ? 'primary' : 'danger'}
+        title={confirm && { delete: 'Delete rack?', archive: 'Archive rack?', restore: 'Restore rack?' }[confirm.type]}
+        confirmLabel={confirm && { delete: 'Delete permanently', archive: 'Archive', restore: 'Restore' }[confirm.type]}
+        requireText={confirm?.type === 'delete' ? confirm.rack.name : undefined}
+      >
+        {confirm?.type === 'delete' && (confirm.rack.box_count > 0
+          ? <Alert tone="warning">Rack {confirm.rack.name} still holds {confirm.rack.box_count} box(es). The database will refuse until they are moved or archived.</Alert>
+          : <p>Permanently delete empty rack <strong>{confirm.rack.name}</strong> from {confirm.rack.tank_name}?</p>)}
+        {confirm?.type === 'archive' && <p>Archive rack <strong>{confirm.rack.name}</strong>? Only racks whose boxes are all archived or moved can be archived.</p>}
+        {confirm?.type === 'restore' && <p>Make rack <strong>{confirm.rack.name}</strong> active again? It must fit within its tank&apos;s capacity.</p>}
+      </ConfirmDialog>
+    </>
+  );
+}
