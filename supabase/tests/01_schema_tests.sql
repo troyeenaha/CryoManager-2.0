@@ -43,7 +43,7 @@ grant execute on all functions in schema test to authenticated, anon;
 
 -- ----- users -------------------------------------------------------
 insert into auth.users (id, email, raw_user_meta_data) values
- ('00000000-0000-0000-0000-00000000000a', 'admin@umich.edu',   '{"full_name":"Ada Admin"}'),
+ ('00000000-0000-0000-0000-00000000000a', 'admin@umich.edu',   '{"full_name":"Ada Admin","initials":"a.a"}'),
  ('00000000-0000-0000-0000-00000000000b', 'member@umich.edu',  '{"full_name":"Max Member"}'),
  ('00000000-0000-0000-0000-00000000000c', 'viewer@umich.edu',  '{"full_name":"Vic Viewer"}'),
  ('00000000-0000-0000-0000-00000000000d', 'pending@umich.edu', '{"full_name":"Pat Pending"}');
@@ -92,9 +92,9 @@ reset role;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000b"}', false);
 set role authenticated;
 
-insert into samples (id, box_id, row_num, col_num, sample_name, transfected, passage_number, passaged_by, media, passage_date)
+insert into samples (id, box_id, row_num, col_num, sample_name, transfected, transfected_with, passage_number, passaged_by, media, passage_date)
 values ('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 1, 2,
-        'EO771 HER2', true, 5, 'Max Member', '10% DMSO, 90% FBS', '2026-02-11');
+        'EO771 HER2', true, 'pLenti-HER2', 5, 'Max Member', '10% DMSO, 90% FBS', '2026-02-11');
 select test.expect((select sample_code like 'S-0000%' and position = 'A2' from sample_locations), 'sample gets ID and A2 label');
 select test.expect((select tank_name || ' > ' || rack_name || ' > ' || box_name = 'LN2 Tank > A > A1' from sample_locations),
   'location path resolves');
@@ -193,6 +193,40 @@ select test.expect((select string_agg(name || ':' || shade_index || '/' || shade
   'boxes take natural-order shades of their rack');
 select test.expect((select bool_and(rack_color = 'purple') from box_summary where rack_name = 'A'), 'boxes inherit rack color');
 select test.expect((select rack_color = 'purple' and shade_count = 3 from sample_locations limit 1), 'sample locations carry the rack shade');
+
+-- ----- initials, transfected_with, grid name, bulk fill ------------------
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+ ('00000000-0000-0000-0000-00000000000e', 'new@umich.edu', '{"full_name":"Nia Newton","initials":"n.n"}');
+select test.expect((select initials = 'NN' from profiles where email = 'new@umich.edu'), 'initials from sign-up are cleaned to NN');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000c"}', false);
+set role authenticated;
+select test.expect_rows($q$update profiles set initials = 'VV' where id = auth.uid()$q$, 1);
+select test.expect_error($q$update profiles set initials = 'v1' where id = auth.uid()$q$, '%check constraint%');
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+select test.expect_rows($q$insert into samples (box_id, row_num, col_num, sample_name, transfected, transfected_with)
+  select '30000000-0000-0000-0000-000000000001', 5, c, 'Bulk line', true, 'pLenti-HER2' from generate_series(1, 4) c$q$, 4);
+select test.expect((select count(distinct sample_code) = 4 and bool_and(grid_name like 'A1E_')
+                    from sample_locations where sample_name = 'Bulk line'), 'bulk fill gives 4 IDs and grid names A1E1..A1E4');
+select test.expect_error($q$insert into samples (box_id, row_num, col_num, sample_name)
+  select '30000000-0000-0000-0000-000000000001', 5, c, 'Clash' from generate_series(4, 6) c$q$, '%samples_one_per_position%');
+select test.expect((select count(*) = 0 from samples where sample_name = 'Clash'), 'a bulk fill that hits a taken slot saves nothing');
+
+-- ----- initials & transfected-with -----------------------------------
+select test.expect((select initials = 'AA' from profiles where email = 'admin@umich.edu'), 'initials captured at sign-up, cleaned to capitals');
+update profiles set initials = 'AD' where id = auth.uid();
+select test.expect_error($q$update profiles set initials = 'toolong' where id = auth.uid()$q$, '%profiles_initials_check%');
+select test.expect_error($q$insert into samples (box_id, row_num, col_num, sample_name, transfected)
+  values ('30000000-0000-0000-0000-000000000001', 9, 9, 'X', true)$q$, '%samples_transfected_with_check%');
+insert into samples (box_id, row_num, col_num, sample_name, transfected, transfected_with) values
+  ('30000000-0000-0000-0000-000000000001', 9, 9, 'X', true, 'pLenti-HER2'),
+  ('30000000-0000-0000-0000-000000000001', 9, 10, 'X', true, 'pLenti-HER2');
+select test.expect((select grid_name = 'A1I9' from sample_locations where row_num = 9 and col_num = 9), 'grid name = box name + position');
+select test.expect_error($q$insert into samples (box_id, row_num, col_num, sample_name) values
+  ('30000000-0000-0000-0000-000000000001', 9, 11, 'Y'), ('30000000-0000-0000-0000-000000000001', 9, 9, 'Y')$q$, '%samples_one_per_position%');
+select test.expect((select count(*) = 0 from samples where sample_name = 'Y'), 'batch add is all-or-nothing');
 
 reset role;
 \echo

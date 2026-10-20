@@ -10,12 +10,14 @@ import { Alert, Badge, Button, Field, Modal, Segmented, Select, Spinner, Textare
 // ------------------------------------------------------------------ details
 
 const FIELDS = [
+  ['Grid Name', (s, b) => `${b.name}${positionLabel(s.row_num, s.col_num)}`],
   ['Sample ID', (s) => s.sample_code],
   ['Transfected', (s) => yesNo(s.transfected)],
+  ['Transfected With', (s) => s.transfected_with || '—'],
   ['Passage No.', (s) => s.passage_number ?? '—'],
   ['Who Passaged', (s) => s.passaged_by || '—'],
   ['Date of Passage', (s) => fmtDate(s.passage_date)],
-  ['Media', (s) => s.media || '—'],
+  ['Freezing Media', (s) => s.media || '—'],
   ['Vials', (s) => s.vial_count],
   ['Researcher Responsible', (s) => s.researcher_responsible || '—'],
   ['Date Frozen', (s) => fmtDate(s.date_frozen)],
@@ -95,7 +97,7 @@ export function SampleDetails({ sample, box, onClose, onEdit, onMove, onRemove, 
       title={
         <span className="flex items-center gap-3">
           <span className="h-9 min-w-9 px-2 rounded-lg flex items-center justify-center text-sm font-semibold" style={{ background: c.fill, color: c.text }}>
-            {positionLabel(sample.row_num, sample.col_num)}
+            {box.name}{positionLabel(sample.row_num, sample.col_num)}
           </span>
           <span className="truncate">{sample.sample_name}</span>
         </span>
@@ -129,7 +131,7 @@ export function SampleDetails({ sample, box, onClose, onEdit, onMove, onRemove, 
             {FIELDS.map(([label, get]) => (
               <div key={label} className="min-w-0">
                 <dt className="text-xs font-medium text-slate-500">{label}</dt>
-                <dd className="text-sm text-slate-900 break-words">{get(sample)}</dd>
+                <dd className="text-sm text-slate-900 break-words">{get(sample, box)}</dd>
               </div>
             ))}
           </dl>
@@ -165,7 +167,7 @@ export function MoveDialog({ sample, fromBox, onClose, onMoved }) {
   function submit() {
     if (!target) return;
     run(() => move.mutateAsync({ sample, boxId, row: target.row, col: target.col }), {
-      success: `${sample.sample_name} moved to ${box.name} ${positionLabel(target.row, target.col)}.`,
+      success: `${sample.sample_name} moved to ${box.name}${positionLabel(target.row, target.col)}.`,
       onDone: onMoved,
     });
   }
@@ -183,7 +185,7 @@ export function MoveDialog({ sample, fromBox, onClose, onMoved }) {
           <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={submit} disabled={!target} loading={busy}>
             <ArrowRightLeft className="h-4 w-4" />
-            {target ? `Move to ${box.name} ${positionLabel(target.row, target.col)}` : 'Choose a position'}
+            {target ? `Move to ${box.name}${positionLabel(target.row, target.col)}` : 'Choose a position'}
           </Button>
         </>
       }

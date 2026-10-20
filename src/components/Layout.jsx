@@ -76,8 +76,8 @@ function Sidebar({ onNavigate }) {
 
       <div className="border-t border-slate-100 p-3 shrink-0">
         <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <div className="h-8 w-8 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-sm font-semibold shrink-0">
-            {(profile?.full_name || profile?.email || '?').slice(0, 1).toUpperCase()}
+          <div className="h-8 min-w-8 px-1 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-sm font-semibold shrink-0">
+            {profile?.initials || (profile?.full_name || profile?.email || '?').slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-slate-800 truncate">{profile?.full_name || profile?.email}</div>

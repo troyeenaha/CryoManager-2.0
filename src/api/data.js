@@ -109,7 +109,7 @@ export async function searchSamples({
   const t = clean(term);
   if (t) {
     const fields = [
-      'sample_name', 'sample_code', 'position', 'tank_name', 'rack_name', 'box_name',
+      'sample_name', 'sample_code', 'grid_name', 'position', 'transfected_with', 'tank_name', 'rack_name', 'box_name',
       'researcher_responsible', 'passaged_by', 'media', 'project', 'cell_line_origin',
       'genetic_modifications', 'selection_marker', 'notes',
     ].map((f) => `${f}.ilike."*${t}*"`);
@@ -156,6 +156,11 @@ export async function saveRow(table, { id, version, ...values }) {
   );
   if (!rows.length) throw new ConflictError();
   return rows[0];
+}
+
+/** Adds several samples in one statement: all are saved, or none are. */
+export async function insertSamples(rows) {
+  return unwrap(await supabase.from('samples').insert(rows).select());
 }
 
 export async function deleteRow(table, id) {

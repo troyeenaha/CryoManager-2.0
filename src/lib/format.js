@@ -23,3 +23,10 @@ export const todayISO = () => {
 };
 
 export const roleLabel = { admin: 'Administrator', member: 'Lab Member', viewer: 'Read-Only' };
+
+/** "t.n" → "TN"; keeps letters only, max 4. */
+export const cleanInitials = (v) => (v || '').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 4);
+
+/** Suggest initials from a full name: "Troyee Naha" → "TN". */
+export const suggestInitials = (name) =>
+  cleanInitials((name || '').trim().split(/\s+/).map((w) => w[0]).join(''));

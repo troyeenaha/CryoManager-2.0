@@ -67,7 +67,7 @@ export default function UsersPage() {
             {pending.map((u) => (
               <Card key={u.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-slate-900">{u.full_name || '(no name given)'}</div>
+                  <div className="font-medium text-slate-900">{u.full_name || '(no name given)'}{u.initials && <span className="ml-2 text-xs font-semibold text-brand-800">{u.initials}</span>}</div>
                   <div className="text-sm text-slate-500">{u.email} · requested {fmtDate(u.created_at)}</div>
                 </div>
                 <Select aria-label="Role to grant" value={roleFor[u.id] || 'member'} onChange={(e) => setRoleFor((r) => ({ ...r, [u.id]: e.target.value }))} className="sm:w-44">
@@ -110,7 +110,10 @@ export default function UsersPage() {
                     return (
                       <tr key={u.id}>
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-900">{u.full_name || '—'}{self && <span className="text-slate-400 font-normal"> (you)</span>}</div>
+                          <div className="font-medium text-slate-900">
+                            {u.initials && <span className="mr-2 inline-flex rounded bg-brand-50 px-1.5 text-xs font-semibold text-brand-800 ring-1 ring-brand-700/20">{u.initials}</span>}
+                            {u.full_name || '—'}{self && <span className="text-slate-400 font-normal"> (you)</span>}
+                          </div>
                           <div className="text-xs text-slate-500">{u.email}</div>
                         </td>
                         <td className="px-4 py-3">

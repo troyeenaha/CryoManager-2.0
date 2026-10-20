@@ -8,7 +8,7 @@ import { useToast } from '../components/Toast.jsx';
 import { useFormSubmit } from '../components/useFormSubmit.js';
 import { downloadBlob, downloadXlsx } from '../lib/export.js';
 import { friendlyError } from '../lib/errors.js';
-import { roleLabel } from '../lib/format.js';
+import { cleanInitials, roleLabel } from '../lib/format.js';
 import { Alert, Button, Card, Field, Input, PageHeader, Spinner } from '../components/ui.jsx';
 
 function Section({ icon: Icon, title, description, children }) {
@@ -29,6 +29,7 @@ function Section({ icon: Icon, title, description, children }) {
 function ProfileSection() {
   const { profile, user, refreshProfile } = useAuth();
   const [name, setName] = useState(profile.full_name || '');
+  const [initials, setInitials] = useState(profile.initials || '');
   const [pw, setPw] = useState('');
   const nameForm = useFormSubmit();
   const pwForm = useFormSubmit();
@@ -39,15 +40,19 @@ function ProfileSection() {
         className="flex flex-col sm:flex-row gap-3 sm:items-end"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!name.trim()) return;
+          if (!name.trim()) return nameForm.setError('Enter your name.');
+          if (!cleanInitials(initials)) return nameForm.setError('Enter your initials.');
           nameForm.run(async () => {
-            unwrap(await supabase.from('profiles').update({ full_name: name.trim() }).eq('id', profile.id).select());
+            unwrap(await supabase.from('profiles').update({ full_name: name.trim(), initials: cleanInitials(initials) }).eq('id', profile.id).select());
             await refreshProfile();
-          }, { success: 'Name updated.' });
+          }, { success: 'Profile updated.' });
         }}
       >
         <Field label="Display name" className="flex-1"><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></Field>
-        <Button type="submit" variant="secondary" loading={nameForm.busy}><Save className="h-4 w-4" /> Save name</Button>
+        <Field label="Initials" hint="Shown as Who Passaged" className="sm:w-32">
+          <Input value={initials} onChange={(e) => setInitials(cleanInitials(e.target.value))} maxLength={4} className="uppercase font-semibold" />
+        </Field>
+        <Button type="submit" variant="secondary" loading={nameForm.busy}><Save className="h-4 w-4" /> Save</Button>
       </form>
       {nameForm.error && <Alert tone="error" className="mt-3">{nameForm.error}</Alert>}
 

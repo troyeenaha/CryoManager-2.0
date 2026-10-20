@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { isConfigured } from './lib/supabase.js';
 import { AuthProvider, useAuth } from './auth/AuthProvider.jsx';
-import { AccessPendingPage, LoginPage, NotConfiguredPage, SetNewPasswordPage } from './auth/AuthPages.jsx';
+import { AccessPendingPage, LoginPage, NotConfiguredPage, SetInitialsPage, SetNewPasswordPage } from './auth/AuthPages.jsx';
 import Layout from './components/Layout.jsx';
 import { Spinner } from './components/ui.jsx';
 import TanksPage from './pages/Tanks.jsx';
@@ -18,6 +18,7 @@ function Gate() {
   if (!session) return <LoginPage />;
   if (recovering) return <SetNewPasswordPage />;
   if (!profile || !isActive) return <AccessPendingPage />;
+  if (!profile.initials) return <SetInitialsPage />;
 
   return (
     <Routes>

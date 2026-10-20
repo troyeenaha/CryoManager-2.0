@@ -3,6 +3,7 @@ import { Clock, KeyRound, LogOut, ShieldOff } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { friendlyError } from '../lib/errors.js';
 import { useAuth } from './AuthProvider.jsx';
+import { cleanInitials, suggestInitials } from '../lib/format.js';
 import { BrandMark } from '../components/Brand.jsx';
 import { Button, Field, Input, Alert } from '../components/ui.jsx';
 
@@ -30,7 +31,7 @@ function AuthShell({ children, title, subtitle }) {
 
 export function LoginPage() {
   const [mode, setMode] = useState('signin'); // signin | signup | forgot
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', initials: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -50,10 +51,11 @@ export function LoginPage() {
         if (err) throw err;
       } else if (mode === 'signup') {
         if (form.password.length < 8) throw new Error('Use a password of at least 8 characters.');
+        if (!cleanInitials(form.initials)) throw new Error('Please enter your initials (as written on your tubes).');
         const { error: err } = await supabase.auth.signUp({
           email: form.email.trim(),
           password: form.password,
-          options: { data: { full_name: form.name.trim() }, emailRedirectTo: window.location.origin },
+          options: { data: { full_name: form.name.trim(), initials: cleanInitials(form.initials) }, emailRedirectTo: window.location.origin },
         });
         if (err) throw err;
         setNotice('Account created. Check your email to confirm your address; an administrator will then approve your access.');
@@ -85,9 +87,25 @@ export function LoginPage() {
         {notice && <Alert tone="success">{notice}</Alert>}
         {error && <Alert tone="error">{error}</Alert>}
         {mode === 'signup' && (
-          <Field label="Full name" required>
-            <Input value={form.name} onChange={set('name')} required autoComplete="name" />
-          </Field>
+          <div className="grid grid-cols-[1fr_7rem] gap-3">
+            <Field label="Full name" required>
+              <Input
+                value={form.name}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setForm((f) => ({
+                    ...f, name,
+                    initials: !f.initials || f.initials === suggestInitials(f.name) ? suggestInitials(name) : f.initials,
+                  }));
+                }}
+                required
+                autoComplete="name"
+              />
+            </Field>
+            <Field label="Initials" required hint="As on your tubes">
+              <Input value={form.initials} onChange={(e) => setForm((f) => ({ ...f, initials: cleanInitials(e.target.value) }))} placeholder="TN" maxLength={4} className="uppercase font-semibold" />
+            </Field>
+          </div>
         )}
         <Field label="Email" required>
           <Input type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
@@ -188,6 +206,40 @@ export function NotConfiguredPage() {
         </p>
         <p>See <strong>docs/SETUP.md</strong> in the repository for step-by-step instructions.</p>
       </div>
+    </AuthShell>
+  );
+}
+
+export function SetInitialsPage() {
+  const { profile, refreshProfile } = useAuth();
+  const [initials, setInitials] = useState(suggestInitials(profile?.full_name));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(e) {
+    e.preventDefault();
+    const value = cleanInitials(initials);
+    if (!value) return setError('Please enter your initials.');
+    setBusy(true);
+    setError('');
+    const { error: err } = await supabase.from('profiles').update({ initials: value }).eq('id', profile.id);
+    if (err) { setBusy(false); return setError(friendlyError(err)); }
+    await refreshProfile();
+    setBusy(false);
+  }
+
+  return (
+    <AuthShell
+      title="What are your initials?"
+      subtitle="These appear as “Who Passaged” on samples, the same way you write them on tubes. You can change them later in Settings."
+    >
+      <form onSubmit={submit} className="space-y-4">
+        {error && <Alert tone="error">{error}</Alert>}
+        <Field label="Initials" required hint="Letters only, up to 4 (e.g. TN)">
+          <Input value={initials} onChange={(e) => setInitials(cleanInitials(e.target.value))} maxLength={4} className="uppercase text-lg font-semibold tracking-widest" autoFocus />
+        </Field>
+        <Button type="submit" className="w-full" loading={busy}>Continue</Button>
+      </form>
     </AuthShell>
   );
 }
