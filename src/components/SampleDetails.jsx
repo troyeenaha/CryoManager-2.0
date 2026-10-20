@@ -3,6 +3,7 @@ import { Archive, ArrowRightLeft, History, PackageOpen, Pencil, RotateCcw, Spark
 import { moveSamples, takeOutSamples, useBoxSamples, useBoxes, useInventoryMutation, useSampleHistory } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { useFormSubmit } from './useFormSubmit.js';
+import { NotifyMoveDialog } from './NotifyMove.jsx';
 import { boxColorOf, boxDisplay, positionLabel, rowLabel } from '../lib/grid.js';
 import { fmtDate, fmtDateTime, yesNo } from '../lib/format.js';
 import { Alert, Badge, Button, Field, Modal, Segmented, Select, Spinner, Textarea, cx } from './ui.jsx';
@@ -167,6 +168,7 @@ export function TransferDialog({ samples, fromBox, onClose, onMoved }) {
   const { data: boxes } = useBoxes();
   const [boxId, setBoxId] = useState(fromBox.id);
   const [targets, setTargets] = useState({}); // sampleId -> {row, col}
+  const [done, setDone] = useState(null); // moves, once saved
   const { data: occupants, isLoading } = useBoxSamples(boxId);
   const { run, busy, error } = useFormSubmit();
   const move = useInventoryMutation(moveSamples);
@@ -213,12 +215,13 @@ export function TransferDialog({ samples, fromBox, onClose, onMoved }) {
   function submit() {
     const moves = samples.map((s) => ({ sample: s, boxId, row: targets[s.id].row, col: targets[s.id].col }));
     run(() => move.mutateAsync(moves), {
-      success: samples.length === 1
-        ? `${samples[0].sample_name} moved to ${box.name}${positionLabel(moves[0].row, moves[0].col)}.`
-        : `${samples.length} samples moved to box ${boxDisplay(box)}.`,
-      onDone: onMoved,
+      onDone: () => setDone(samples.map((s) => ({
+        sample: s, fromBox, from: { row: s.row_num, col: s.col_num }, toBox: box, to: targets[s.id],
+      }))),
     });
   }
+
+  if (done) return <NotifyMoveDialog moves={done} onClose={onMoved} />;
 
   return (
     <Modal

@@ -7,15 +7,15 @@ export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const dismiss = useCallback((id) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const push = useCallback(
-    (tone, message) => {
+    (tone, message, action) => {
       const id = Math.random().toString(36).slice(2);
-      setToasts((t) => [...t.slice(-3), { id, tone, message }]);
-      setTimeout(() => dismiss(id), tone === 'error' ? 8000 : 4000);
+      setToasts((t) => [...t.slice(-3), { id, tone, message, action }]);
+      setTimeout(() => dismiss(id), tone === 'error' ? 8000 : action ? 9000 : 4000);
     },
     [dismiss],
   );
   const api = {
-    success: (m) => push('success', m),
+    success: (m, action) => push('success', m, action),
     error: (m) => push('error', m),
     info: (m) => push('info', m),
   };
@@ -31,7 +31,17 @@ export function ToastProvider({ children }) {
           return (
             <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} className="animate-toast flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
               <Icon className={`h-5 w-5 shrink-0 ${colors[t.tone]}`} />
-              <p className="text-sm text-slate-700 flex-1">{t.message}</p>
+              <div className="flex-1">
+                <p className="text-sm text-slate-700">{t.message}</p>
+                {t.action && (
+                  <button
+                    onClick={() => { dismiss(t.id); t.action.onClick(); }}
+                    className="mt-1.5 text-sm font-medium text-brand-700 hover:underline"
+                  >
+                    {t.action.label}
+                  </button>
+                )}
+              </div>
               <button aria-label="Dismiss" onClick={() => dismiss(t.id)} className="text-slate-400 hover:text-slate-600">
                 <X className="h-4 w-4" />
               </button>

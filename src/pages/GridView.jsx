@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import SampleForm from '../components/SampleForm.jsx';
 import { RemoveDialog, SampleDetails, TransferDialog } from '../components/SampleDetails.jsx';
 import { useToast } from '../components/Toast.jsx';
+import { NotifyMoveDialog } from '../components/NotifyMove.jsx';
 import { friendlyError } from '../lib/errors.js';
 import { boxColorOf, boxDisplay, fmtPct, parsePosition, pct, positionLabel, rowLabel } from '../lib/grid.js';
 import { fmtDate, yesNo } from '../lib/format.js';
@@ -370,7 +371,11 @@ export default function GridViewPage() {
     const to = `${box.name}${positionLabel(row, col)}`;
     try {
       await move.mutateAsync({ sample, boxId: box.id, row, col });
-      toast.success(`${sample.sample_name} moved from ${from} to ${to}.`);
+      const moves = [{ sample, fromBox: box, from: { row: sample.row_num, col: sample.col_num }, toBox: box, to: { row, col } }];
+      toast.success(`${sample.sample_name} moved from ${from} to ${to}.`, {
+        label: 'Email someone about this',
+        onClick: () => setDialog({ type: 'notify', moves }),
+      });
     } catch (err) {
       toast.error(friendlyError(err));
     }
@@ -521,6 +526,9 @@ export default function GridViewPage() {
       )}
       {dialog?.type === 'move' && (
         <TransferDialog samples={[dialog.sample]} fromBox={box} onClose={close} onMoved={close} />
+      )}
+      {dialog?.type === 'notify' && (
+        <NotifyMoveDialog moves={dialog.moves} onClose={close} />
       )}
       {dialog?.type === 'transfer' && (
         <TransferDialog samples={dialog.samples} fromBox={box} onClose={close} onMoved={() => { close(); stopSelecting(); }} />

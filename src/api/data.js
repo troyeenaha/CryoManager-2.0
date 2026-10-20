@@ -92,9 +92,44 @@ const clean = (s) => (s || '').replace(/[,()*\\:"%]/g, ' ').trim();
  * Global sample search across name, ID, position, researcher, media,
  * project, tank / rack / box names, plus optional filters. Paginated.
  */
+const SEARCH_FIELDS = [
+  'sample_name', 'sample_code', 'grid_name', 'position', 'transfected_with', 'tank_name', 'rack_name', 'box_name',
+  'box_label', 'researcher_responsible', 'passaged_by', 'media', 'project', 'cell_line_origin',
+  'genetic_modifications', 'selection_marker', 'antibiotic_resistance', 'notes',
+];
+
+/** Initials of lab members whose name or email contains `word` ("troyee" → ["TN"]). */
+function initialsFor(word, people) {
+  const w = word.toLowerCase();
+  return (people || [])
+    .filter((p) => p.initials && ((p.full_name || '').toLowerCase().includes(w) || (p.email || '').toLowerCase().split('@')[0].includes(w)))
+    .map((p) => p.initials);
+}
+
+/** One OR-group: everything a single search word could match. */
+function wordGroup(word, people) {
+  const t = clean(word);
+  if (!t) return null;
+  const parts = SEARCH_FIELDS.map((f) => `${f}.ilike."*${t}*"`);
+  initialsFor(t, people).forEach((ini) => parts.push(`passaged_by.eq.${ini}`));
+  (people || [])
+    .filter((p) => (p.full_name || '').toLowerCase().includes(t.toLowerCase()) && p.full_name)
+    .forEach((p) => parts.push(`researcher_responsible.ilike."*${clean(p.full_name)}*"`));
+  if (/^\d+$/.test(t)) parts.push(`passage_number.eq.${t}`);
+  if (/^(transfected|yes)$/i.test(t)) parts.push('transfected.is.true');
+  if (/^(untransfected|no)$/i.test(t)) parts.push('transfected.is.false');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) parts.push(`passage_date.eq.${t}`, `date_frozen.eq.${t}`, `date_added.eq.${t}`);
+  return `or(${parts.join(',')})`;
+}
+
+/**
+ * Search the inventory. Every word in `term` must match something
+ * (cell line, ID, grid name, box nickname, initials, a person's full name, …).
+ * `people` (lab profiles) lets "Troyee" find samples passaged by "TN".
+ */
 export async function searchSamples({
   term = '', status = 'active', transfected = 'any', researcher = '',
-  dateFrom = '', dateTo = '', page = 0, pageSize = 50, all = false,
+  dateFrom = '', dateTo = '', people = [], limit = 2000,
 }) {
   let q = supabase.from('sample_locations').select('*', { count: 'exact' });
   if (status !== 'any') q = q.eq('status', status);
@@ -102,27 +137,21 @@ export async function searchSamples({
   if (dateFrom) q = q.gte('passage_date', dateFrom);
   if (dateTo) q = q.lte('passage_date', dateTo);
 
-  // Text conditions are OR-groups; when both are used they are ANDed together.
   const groups = [];
   const r = clean(researcher);
-  if (r) groups.push(['researcher_responsible', 'passaged_by'].map((f) => `${f}.ilike."*${r}*"`));
-  const t = clean(term);
-  if (t) {
-    const fields = [
-      'sample_name', 'sample_code', 'grid_name', 'position', 'transfected_with', 'tank_name', 'rack_name', 'box_name', 'box_label',
-      'researcher_responsible', 'passaged_by', 'media', 'project', 'cell_line_origin',
-      'genetic_modifications', 'selection_marker', 'notes',
-    ].map((f) => `${f}.ilike."*${t}*"`);
-    if (/^\d+$/.test(t)) fields.push(`passage_number.eq.${t}`);
-    if (/^(yes|transfected)$/i.test(t)) fields.push('transfected.is.true');
-    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) fields.push(`passage_date.eq.${t}`, `date_frozen.eq.${t}`, `date_added.eq.${t}`);
-    groups.push(fields);
+  if (r) {
+    const parts = ['researcher_responsible', 'passaged_by'].map((f) => `${f}.ilike."*${r}*"`);
+    initialsFor(r, people).forEach((ini) => parts.push(`passaged_by.eq.${ini}`));
+    groups.push(`or(${parts.join(',')})`);
   }
-  if (groups.length === 1) q = q.or(groups[0].join(','));
-  if (groups.length === 2) q = q.or(`and(or(${groups[0].join(',')}),or(${groups[1].join(',')}))`);
+  (term || '').split(/\s+/).filter(Boolean).slice(0, 6).forEach((w) => {
+    const g = wordGroup(w, people);
+    if (g) groups.push(g);
+  });
+  if (groups.length) q = q.or(`and(${groups.join(',')})`);
 
-  q = q.order('tank_name').order('rack_name').order('box_name').order('row_num').order('col_num');
-  if (!all) q = q.range(page * pageSize, page * pageSize + pageSize - 1);
+  q = q.order('sample_name').order('tank_name').order('rack_name').order('box_name').order('row_num').order('col_num')
+    .range(0, limit - 1);
   const { data, error, count } = await q;
   if (error) throw error;
   return { rows: data, count: count ?? data.length };
