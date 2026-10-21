@@ -5,9 +5,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { BrandMark, LabLogo } from './Brand.jsx';
-import { roleLabel } from '../lib/format.js';
 import { useLiveInventory } from '../api/data.js';
 import { useInvitations } from './AddPerson.jsx';
+import { roleLabel } from '../lib/format.js';
 import { cx } from './ui.jsx';
 
 const NAV = [

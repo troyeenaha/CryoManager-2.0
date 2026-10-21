@@ -27,21 +27,57 @@ export const useTanks = () =>
     queryFn: async () => unwrap(await supabase.from('tank_summary').select('*').order('name')),
   });
 
+// Natural order: A1, A2 … A9, A10, A11, A12 (not A1, A10, A11, A12, A2).
+const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const byNatural = (...keys) => (a, b) => {
+  for (const k of keys) {
+    const d = natural.compare(String(a[k] ?? ''), String(b[k] ?? ''));
+    if (d) return d;
+  }
+  return 0;
+};
+
 export const useRacks = () =>
   useQuery({
     queryKey: keys.racks,
     queryFn: async () =>
-      unwrap(await supabase.from('rack_summary').select('*').order('tank_name').order('name')),
+      unwrap(await supabase.from('rack_summary').select('*')).sort(byNatural('tank_name', 'name')),
   });
 
 export const useBoxes = () =>
   useQuery({
     queryKey: keys.boxes,
     queryFn: async () =>
-      unwrap(
-        await supabase.from('box_summary').select('*').order('tank_name').order('rack_name').order('name'),
-      ),
+      unwrap(await supabase.from('box_summary').select('*')).sort(byNatural('tank_name', 'rack_name', 'name')),
   });
+
+/**
+ * Adds the missing boxes to racks, named like rack A: rack B gets B1, B2 …
+ * up to the rack's capacity. One statement, so either all are added or none.
+ */
+export async function fillRacksWithBoxes(plan) {
+  const rows = plan.flatMap((p) => p.names.map((name) => ({ rack_id: p.rack.id, name, rows: 9, cols: 9 })));
+  if (!rows.length) return [];
+  return unwrap(await supabase.from('boxes').insert(rows).select('id'));
+}
+
+/** Which boxes each rack is missing (by name), up to its capacity. */
+export function planRackFill(racks, boxes) {
+  return racks
+    .filter((r) => r.status !== 'archived')
+    .map((r) => {
+      const inRack = boxes.filter((b) => b.rack_id === r.id && b.status !== 'archived');
+      const taken = new Set(boxes.filter((b) => b.rack_id === r.id).map((b) => b.name.trim().toLowerCase()));
+      const free = Math.max(0, r.box_capacity - inRack.length);
+      const names = [];
+      for (let i = 1; names.length < free && i <= r.box_capacity + 50; i++) {
+        const n = `${r.name}${i}`;
+        if (!taken.has(n.toLowerCase())) names.push(n);
+      }
+      return { rack: r, names };
+    })
+    .filter((p) => p.names.length);
+}
 
 export const useBoxSamples = (boxId) =>
   useQuery({

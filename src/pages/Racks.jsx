@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Archive, ArchiveRestore, Boxes as BoxesIcon, LayoutList, Pencil, Plus, Trash2 } from 'lucide-react';
-import { deleteRow, saveRow, useBoxes, useInventoryMutation, useRacks, useTanks } from '../api/data.js';
+import { deleteRow, fillRacksWithBoxes, planRackFill, saveRow, useBoxes, useInventoryMutation, useRacks, useTanks } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { useFormSubmit } from '../components/useFormSubmit.js';
@@ -20,7 +20,7 @@ function RackSchematic({ rack, boxes, onOpenBox }) {
   const slots = Math.max(rack.box_capacity, inRack.length);
   const h = slots > 16 ? 'h-2.5' : slots > 12 ? 'h-3.5' : 'h-[18px]';
   return (
-    <div className="w-28 shrink-0 select-none" aria-label={`Rack ${rack.name}: ${inRack.length} of ${rack.box_capacity} slots used, top to bottom`}>
+    <div className="w-40 shrink-0 select-none" aria-label={`Rack ${rack.name}: ${inRack.length} of ${rack.box_capacity} slots used, top to bottom`}>
       <div className="text-[10px] text-center text-slate-400 mb-1">top</div>
       <div className="rounded-md border-2 border-slate-300 bg-slate-50 p-1 relative">
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-2 w-8 rounded-t-md border-2 border-b-0 border-slate-300 bg-white" aria-hidden="true" />
@@ -40,7 +40,7 @@ function RackSchematic({ rack, boxes, onOpenBox }) {
                 className={cx(h, 'rounded-[3px] px-1 text-[9px] font-semibold leading-none flex items-center justify-between gap-1 overflow-hidden hover:ring-2 hover:ring-slate-400 transition')}
                 style={{ background: c.fill, color: c.text }}
               >
-                {slots <= 16 && <><span className="truncate">{b.name}</span><span className="opacity-80 font-normal">{b.filled_positions}</span></>}
+                {slots <= 16 && <><span className="truncate">{b.name}{b.label && <span className="font-normal opacity-90"> · {b.label}</span>}</span><span className="opacity-80 font-normal shrink-0">{b.filled_positions}</span></>}
               </button>
             );
           })}
@@ -170,6 +170,8 @@ export default function RacksPage() {
   const tanksQ = useTanks();
   const racksQ = useRacks();
   const boxesQ = useBoxes();
+  const [filling, setFilling] = useState(null); // plan for "Fill racks with boxes"
+  const fill = useInventoryMutation(fillRacksWithBoxes);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -206,7 +208,14 @@ export default function RacksPage() {
       <PageHeader
         title="Racks"
         subtitle="Racks inside each tank"
-        actions={isAdmin && <Button onClick={() => setEditing({})} disabled={!tanks.length}><Plus className="h-4 w-4" /> Add Rack</Button>}
+        actions={isAdmin && (
+          <>
+            <Button variant="secondary" onClick={() => setFilling(planRackFill(racksQ.data || [], boxesQ.data || []))} disabled={!racksQ.data?.length || !boxesQ.data}>
+              <BoxesIcon className="h-4 w-4" /> Fill racks with boxes
+            </Button>
+            <Button onClick={() => setEditing({})} disabled={!tanks.length}><Plus className="h-4 w-4" /> Add Rack</Button>
+          </>
+        )}
       />
       <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:items-center">
         <SearchInput value={search} onChange={setSearch} placeholder="Search racks" className="sm:max-w-xs flex-1" />
@@ -259,6 +268,7 @@ export default function RacksPage() {
                     label={`Actions for rack ${r.name}`}
                     items={isAdmin ? [
                       { label: 'Edit', icon: Pencil, onClick: () => setEditing(r) },
+                      { label: 'Fill with boxes', icon: BoxesIcon, onClick: () => setFilling(planRackFill([r], boxesQ.data || [])) },
                       r.status === 'archived'
                         ? { label: 'Restore', icon: ArchiveRestore, onClick: () => setConfirm({ type: 'restore', rack: r }) }
                         : { label: 'Archive', icon: Archive, onClick: () => setConfirm({ type: 'archive', rack: r }) },
@@ -291,6 +301,56 @@ export default function RacksPage() {
 
       {editing && (
         <RackForm key={editing.id || 'new'} rack={editing} tanks={tanks} allRacks={racksQ.data || []} defaultTankId={tankFilter} onClose={() => setEditing(null)} />
+      )}
+
+      {filling && (
+        <Modal
+          open
+          onClose={() => setFilling(null)}
+          busy={fill.isPending}
+          title="Fill racks with boxes"
+          subtitle="Adds empty 9 × 9 boxes, named like rack A (B1, B2 …), up to each rack's capacity."
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setFilling(null)} disabled={fill.isPending}>{filling.length ? 'Cancel' : 'Close'}</Button>
+              {filling.length > 0 && (
+                <Button
+                  loading={fill.isPending}
+                  onClick={async () => {
+                    try {
+                      const added = await fill.mutateAsync(filling);
+                      toast.success(`${added.length} boxes added.`);
+                      setFilling(null);
+                    } catch (err) {
+                      toast.error(friendlyError(err));
+                    }
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> Add {filling.reduce((n, p) => n + p.names.length, 0)} boxes
+                </Button>
+              )}
+            </>
+          }
+        >
+          {filling.length === 0 ? (
+            <p className="text-sm text-slate-600">Every rack is already full. Nothing to add.</p>
+          ) : (
+            <>
+              <ul className="space-y-2 max-h-72 overflow-y-auto">
+                {filling.map((p) => (
+                  <li key={p.rack.id} className="flex items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                    <span className="h-6 w-6 rounded-md shrink-0" style={{ background: boxColor(p.rack.color).fill }} />
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900">{p.rack.tank_name} › Rack {p.rack.name}: {p.names.length} box{p.names.length === 1 ? '' : 'es'}</div>
+                      <div className="text-xs text-slate-500 truncate">{p.names.join(', ')}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-slate-500">Boxes already in a rack are left alone. Anyone with admin access can rename, resize or add a nickname to any box later (Boxes → ⋮ → Edit).</p>
+            </>
+          )}
+        </Modal>
       )}
 
       <ConfirmDialog
