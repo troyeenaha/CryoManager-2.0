@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, TriangleAlert, UserCheck, UserPlus, UserX, Users as UsersIcon } from 'lucide-react';
+import { Check, UserCheck, UserPlus, UserX, Users as UsersIcon } from 'lucide-react';
 import { AddPersonDialog, InvitationsList } from '../components/AddPerson.jsx';
 import { supabase, unwrap } from '../lib/supabase.js';
 import { useInventoryMutation, useProfiles } from '../api/data.js';
@@ -21,10 +21,9 @@ async function updateProfile(id, values) {
   return rows[0];
 }
 
-/** Two steps: explain what happens, then ask "are you sure?" before deleting. */
+/** One confirmation before removing someone completely. */
 function RemovePersonDialog({ person, onClose }) {
   const toast = useToast();
-  const [step, setStep] = useState(1);
   const remove = useInventoryMutation(async (id) => unwrap(await supabase.rpc('remove_person', { p_user: id })));
   const who = person.full_name || person.email;
 
@@ -38,44 +37,23 @@ function RemovePersonDialog({ person, onClose }) {
     }
   }
 
-  if (step === 1) {
-    return (
-      <Modal
-        open
-        onClose={onClose}
-        size="sm"
-        title={`Remove ${who}?`}
-        footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" onClick={() => setStep(2)}>Continue</Button></>}
-      >
-        <div className="text-sm text-slate-600 space-y-3">
-          <p><strong>{who}</strong>{person.initials ? ` (${person.initials})` : ''} · {person.email}</p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Their account and login are deleted. They can't sign in any more.</li>
-            <li>They disappear from the Users list.</li>
-            <li>The samples they added and the history of what they did <strong>stay</strong> as they are.</li>
-            <li>You can invite the same email again later if needed.</li>
-          </ul>
-        </div>
-      </Modal>
-    );
-  }
   return (
     <Modal
       open
       onClose={onClose}
       busy={remove.isPending}
       size="sm"
-      title="Are you sure?"
+      title={`Remove ${who}?`}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={remove.isPending}>No, keep {person.full_name ? person.full_name.split(' ')[0] : 'them'}</Button>
-          <Button variant="danger" onClick={confirmRemove} loading={remove.isPending}><UserX className="h-4 w-4" /> Yes, remove permanently</Button>
+          <Button variant="secondary" onClick={onClose} disabled={remove.isPending}>Cancel</Button>
+          <Button variant="danger" onClick={confirmRemove} loading={remove.isPending}><UserX className="h-4 w-4" /> Remove permanently</Button>
         </>
       }
     >
-      <div className="flex gap-3 text-sm text-slate-700">
-        <TriangleAlert className="h-5 w-5 text-red-500 shrink-0" />
-        <p>This permanently removes <strong>{who}</strong> ({person.email}). It can't be undone.</p>
+      <div className="text-sm text-slate-600 space-y-3">
+        <p><strong>{who}</strong>{person.initials ? ` (${person.initials})` : ''} · {person.email}</p>
+        <p>Their account and login are deleted and they can no longer sign in. The samples they added and the history of what they did stay as they are. This can't be undone, but you can invite the same email again later.</p>
       </div>
     </Modal>
   );
