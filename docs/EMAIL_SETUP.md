@@ -81,3 +81,32 @@ To change the key later:
 ```sql
 select vault.update_secret((select id from vault.secrets where name = 'resend_api_key'), 're_NEW_KEY');
 ```
+
+---
+
+## Part C: send "vial moved" emails from the app (~10 minutes)
+
+After someone moves vials, CryoManager can email the lab members they choose, e.g.
+*"Troyee moved EO771 HER2 from A1B4 to A2C1"*, from the same Gmail as the invitations.
+Until this is set up, the app offers to write the email in the person's own email program instead.
+
+1. **Make a second Gmail App Password** at <https://myaccount.google.com/apppasswords>, named
+   `CryoManager alerts`, using the same Gmail account as Part A. Keep the page open.
+2. **Add two secrets:** Supabase → **Edge Functions** → **Secrets** → add:
+
+   | Name | Value |
+   |---|---|
+   | `GMAIL_USER` | the Gmail address (same as Part A) |
+   | `GMAIL_APP_PASSWORD` | the new 16-letter App Password |
+
+3. **Create the function:** Supabase → **Edge Functions** → **Deploy a new function** → **Via Editor**.
+   - Name it exactly `notify-move`.
+   - Delete the sample code, paste everything from `supabase/functions/notify-move/index.ts`
+     in the GitHub repo, and click **Deploy**.
+4. **Turn off the extra JWT check:** open the `notify-move` function → **Details** (or Settings) →
+   turn **off** "Verify JWT with legacy secret" / "Enforce JWT verification", then save.
+   The function checks the person's sign-in itself, so this is safe.
+5. **Test:** move a vial, tick your own second account (or a lab-mate), and click **Send email**.
+
+Only signed-in Lab Members and Administrators can send these, and only to people with an active
+CryoManager account. Replies go straight to the person who moved the vials.

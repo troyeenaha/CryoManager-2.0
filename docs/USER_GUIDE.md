@@ -16,7 +16,7 @@ form → **Save**. The grid name (e.g. A1B4) is filled in for you. Everything ab
 
 **One square = one vial.** Each vial is identified by its grid name: box + position, e.g. A1B4.
 
-**Move samples.** Within the same box, drag a sample onto an empty square. To move one or many to another box: **Select samples** → click them (or a row letter) → **Move to another box** → choose the box → click the new squares (or **Fill first empty squares**) → **Move**. All of them move together, or none do.
+**Move samples.** Within the same box, drag a sample onto an empty square. To move one or many to another box: **Select samples** → click them (or a row letter; or just hold Ctrl, ⌘ on a Mac, and click samples, and Shift-click to add a whole run) → **Move to another box** → choose the box → click the new squares (or **Fill first empty squares**) → **Move**. All of them move together, or none do. Afterwards you can tick who should know, and CryoManager emails them where each vial went.
 
 **Box nicknames.** A box can have a nickname (e.g. *Greg 1*) as well as its official name (A1). Search finds it by either; grid names always use the official name (A1B4).
 

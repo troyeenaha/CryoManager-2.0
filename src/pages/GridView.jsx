@@ -37,9 +37,9 @@ function Tips({ canEdit }) {
   const tips = canEdit
     ? [
       ['Add one sample', 'click any empty (dashed) square.'],
-      ['Add the same sample to several squares', 'click Fill several squares, pick the squares (or a row letter for a whole row), then Fill.'],
+      ['Add the same sample to several squares', 'click Fill several squares (or Ctrl/⌘-click empty squares), pick the squares or a row letter for a whole row, then Fill.'],
       ['Move within this box', 'drag a sample onto an empty square.'],
-      ['Move or take out several samples', 'click Select samples, pick them, then Move to another box or Take out.'],
+      ['Move or take out several samples', 'click Select samples (or hold Ctrl, ⌘ on a Mac, and click them; Shift-click picks a whole run), then Move to another box or Take out.'],
       ['See details', 'hover over a sample; click it to view, edit, move or take it out.'],
       ['Grid names', 'are box + position, e.g. A1B4 = box A1, row B, column 4.'],
     ]
@@ -175,7 +175,11 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, picked
                       }}
                       onDragEnd={() => { setDragging(null); setOver(null); }}
                       aria-selected={selecting === 'samples' ? isPicked : undefined}
-                      onClick={() => (selecting === 'samples' ? onPick(s) : !selecting && onSample(s))}
+                      onClick={(e) => {
+                        const multi = e.ctrlKey || e.metaKey || e.shiftKey;
+                        if (selecting === 'samples' || (multi && canEdit)) onPick(s, e);
+                        else if (!selecting) onSample(s);
+                      }}
                       onMouseEnter={(e) => !dragging && setHover({ sample: s, rect: e.currentTarget.getBoundingClientRect() })}
                       onMouseLeave={() => setHover(null)}
                       onFocus={(e) => setHover({ sample: s, rect: e.currentTarget.getBoundingClientRect() })}
@@ -213,7 +217,7 @@ function BoxGrid({ box, samples, canEdit, highlight, selecting, selected, picked
                     disabled={!canEdit}
                     onClick={(e) => {
                       if (selecting === 'samples') return;
-                      if (selecting === 'empty' || e.shiftKey) onToggle(r, c);
+                      if (selecting === 'empty' || e.ctrlKey || e.metaKey || e.shiftKey) onToggle(r, c, e);
                       else onEmpty(r, c);
                     }}
                     onDragOver={(e) => {
@@ -275,6 +279,7 @@ export default function GridViewPage() {
   const [dialog, setDialog] = useState(null); // {type, ...}
   const [selecting, setSelecting] = useState(null); // null | 'empty' | 'samples'
   const [selected, setSelected] = useState(() => new Set()); // empty square keys
+  const anchor = useRef(null); // last square clicked while selecting, for Shift-click ranges
   const [picked, setPicked] = useState(() => new Set()); // sample ids
   const highlight = useMemo(() => parsePosition(params.get('pos')), [params]);
   const move = useInventoryMutation(moveSample);
@@ -323,20 +328,45 @@ export default function GridViewPage() {
   const close = () => setDialog(null);
   const occupied = new Set(samples.map((s) => key(s.row_num, s.col_num)));
 
-  const toggle = (r, c) => {
+  // Squares in reading order (A1, A2 … then row B), for Shift-click ranges.
+  const order = (r, c) => (r - 1) * box.cols + c;
+  const between = (r, c, mode) => {
+    const a = anchor.current;
+    if (!a || a.mode !== mode || a.boxId !== box.id) return null;
+    const [lo, hi] = [Math.min(a.at, order(r, c)), Math.max(a.at, order(r, c))];
+    return (r2, c2) => order(r2, c2) >= lo && order(r2, c2) <= hi;
+  };
+  // Click / Ctrl-click / ⌘-click an empty square toggles it; Shift-click selects the run since the last one.
+  const toggle = (r, c, e) => {
     if (occupied.has(key(r, c))) return;
+    const inRange = e?.shiftKey ? between(r, c, 'empty') : null;
     setSelecting('empty');
+    setPicked(new Set());
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(key(r, c))) next.delete(key(r, c)); else next.add(key(r, c));
+      if (inRange) {
+        for (let r2 = 1; r2 <= box.rows; r2 += 1) {
+          for (let c2 = 1; c2 <= box.cols; c2 += 1) if (inRange(r2, c2) && !occupied.has(key(r2, c2))) next.add(key(r2, c2));
+        }
+      } else if (next.has(key(r, c))) next.delete(key(r, c));
+      else next.add(key(r, c));
       return next;
     });
+    anchor.current = { mode: 'empty', boxId: box.id, at: order(r, c) };
   };
-  const pick = (s) => setPicked((prev) => {
-    const next = new Set(prev);
-    if (next.has(s.id)) next.delete(s.id); else next.add(s.id);
-    return next;
-  });
+  // Same for samples: Ctrl/⌘-click adds or removes one, Shift-click adds the run since the last one.
+  const pick = (s, e) => {
+    const inRange = e?.shiftKey ? between(s.row_num, s.col_num, 'samples') : null;
+    if (selecting !== 'samples') { setSelecting('samples'); setSelected(new Set()); }
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (inRange) samples.forEach((x) => inRange(x.row_num, x.col_num) && next.add(x.id));
+      else if (next.has(s.id)) next.delete(s.id);
+      else next.add(s.id);
+      return next;
+    });
+    anchor.current = { mode: 'samples', boxId: box.id, at: order(s.row_num, s.col_num) };
+  };
   const toggleRow = (r) => {
     if (selecting === 'samples') {
       const inRow = samples.filter((s) => s.row_num === r).map((s) => s.id);
@@ -356,7 +386,7 @@ export default function GridViewPage() {
       return next;
     });
   };
-  const stopSelecting = () => { setSelecting(null); setSelected(new Set()); setPicked(new Set()); };
+  const stopSelecting = () => { setSelecting(null); setSelected(new Set()); setPicked(new Set()); anchor.current = null; };
   const pickedSamples = samples
     .filter((s) => picked.has(s.id))
     .sort((a, b) => a.row_num - b.row_num || a.col_num - b.col_num);

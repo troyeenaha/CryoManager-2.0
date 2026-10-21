@@ -326,6 +326,24 @@ export async function moveSample({ sample, boxId, row, col }) {
   );
 }
 
+/**
+ * Emails lab members about moved vials, from the lab's Gmail (Supabase Edge
+ * Function "notify-move"). payload: { recipientIds, moves, note, boxId }.
+ */
+export async function sendMoveAlert(payload) {
+  const { data, error } = await supabase.functions.invoke('notify-move', { body: payload });
+  if (error) {
+    let msg = null;
+    const res = error.context;
+    if (res && typeof res.json === 'function') {
+      try { msg = (await res.json())?.error; } catch { /* not JSON */ }
+      if (!msg && res.status === 404) msg = 'Email sending isn\'t set up yet.';
+    }
+    throw new Error(msg || 'The email could not be sent. Check your connection and try again.');
+  }
+  return data;
+}
+
 /** Mutation that refreshes the inventory views after the database confirms. */
 export function useInventoryMutation(fn) {
   const qc = useQueryClient();

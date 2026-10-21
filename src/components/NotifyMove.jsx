@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
-import { CircleCheck, Mail } from 'lucide-react';
-import { useProfiles } from '../api/data.js';
+import { CircleCheck, Send } from 'lucide-react';
+import { sendMoveAlert, useProfiles } from '../api/data.js';
+import { useToast } from './Toast.jsx';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { boxDisplay, positionLabel } from '../lib/grid.js';
 import { fmtDate, todayISO } from '../lib/format.js';
-import { Button, Field, Input, Modal, Textarea, cx } from './ui.jsx';
+import { Alert, Button, Field, Modal, Textarea, cx } from './ui.jsx';
 
 const where = (box, row, col) =>
   `${box.name}${positionLabel(row, col)} (${box.tank_name} › Rack ${box.rack_name} › Box ${boxDisplay(box)})`;
 
 /**
  * moves: [{ sample, fromBox, from: {row, col}, toBox, to: {row, col} }]
- * Builds an email in the user's own mail app (nothing is sent automatically).
+ * Builds the same message for the person's own mail app (fallback if sending fails).
  */
 export function buildMoveEmail({ moves, me, note }) {
   const n = moves.length;
@@ -36,23 +37,49 @@ export function buildMoveEmail({ moves, me, note }) {
   return { subject, body };
 }
 
+const place = (box) => `${box.tank_name} › Rack ${box.rack_name} › Box ${boxDisplay(box)}`;
+
 export function NotifyMoveDialog({ moves, onClose }) {
   const { profile } = useAuth();
+  const toast = useToast();
   const { data: people } = useProfiles();
   const [chosen, setChosen] = useState(() => new Set());
-  const [other, setOther] = useState('');
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
   const colleagues = useMemo(
     () => (people || []).filter((p) => p.status === 'active' && p.id !== profile?.id && p.email)
       .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email)),
     [people, profile],
   );
-  const extra = other.split(/[,;\s]+/).map((e) => e.trim()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
-  const recipients = [...colleagues.filter((p) => chosen.has(p.id)).map((p) => p.email), ...extra];
+  const recipients = colleagues.filter((p) => chosen.has(p.id));
 
-  function openEmail() {
+  async function send() {
+    setBusy(true);
+    setError(null);
+    try {
+      await sendMoveAlert({
+        recipientIds: recipients.map((p) => p.id),
+        boxId: moves[0].toBox.id,
+        note,
+        moves: moves.map((m) => ({
+          sample: m.sample.sample_name,
+          from: { grid: `${m.fromBox.name}${positionLabel(m.from.row, m.from.col)}`, where: place(m.fromBox) },
+          to: { grid: `${m.toBox.name}${positionLabel(m.to.row, m.to.col)}`, where: place(m.toBox) },
+        })),
+      });
+      toast.success(`Email sent to ${recipients.length === 1 ? (recipients[0].full_name || recipients[0].email) : `${recipients.length} people`}.`);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  // Fallback: write the same message in the person's own email program.
+  function openEmailApp() {
     const { subject, body } = buildMoveEmail({ moves, me: profile, note });
-    const href = `mailto:${recipients.map(encodeURIComponent).join(',')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const href = `mailto:${recipients.map((p) => encodeURIComponent(p.email)).join(',')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = href;
     onClose();
   }
@@ -61,7 +88,7 @@ export function NotifyMoveDialog({ moves, onClose }) {
   return (
     <Modal
       open
-      onClose={onClose}
+      onClose={busy ? () => {} : onClose}
       size="md"
       title={
         <span className="flex items-center gap-2">
@@ -71,9 +98,9 @@ export function NotifyMoveDialog({ moves, onClose }) {
       subtitle="Optional: let someone know by email."
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>No thanks</Button>
-          <Button onClick={openEmail} disabled={!recipients.length}>
-            <Mail className="h-4 w-4" /> Write email{recipients.length ? ` (${recipients.length})` : ''}
+          <Button variant="secondary" onClick={onClose} disabled={busy}>No thanks</Button>
+          <Button onClick={send} disabled={!recipients.length} loading={busy}>
+            <Send className="h-4 w-4" /> Send email{recipients.length ? ` (${recipients.length})` : ''}
           </Button>
         </>
       }
@@ -88,9 +115,18 @@ export function NotifyMoveDialog({ moves, onClose }) {
         {n > 8 && <div>…and {n - 8} more</div>}
       </div>
 
+      {error && (
+        <Alert tone="error" className="mb-3">
+          {error}{' '}
+          {recipients.length > 0 && (
+            <button type="button" onClick={openEmailApp} className="font-semibold underline">Write it in my email app instead</button>
+          )}
+        </Alert>
+      )}
+
       <Field label="Who should know?">
         <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
-          {colleagues.length === 0 && <p className="px-3 py-2.5 text-sm text-slate-500">No other lab members yet. Type an email below.</p>}
+          {colleagues.length === 0 && <p className="px-3 py-2.5 text-sm text-slate-500">No other lab members have accounts yet.</p>}
           {colleagues.map((p) => (
             <label key={p.id} className={cx('flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50', chosen.has(p.id) && 'bg-brand-50')}>
               <input
@@ -105,14 +141,11 @@ export function NotifyMoveDialog({ moves, onClose }) {
           ))}
         </div>
       </Field>
-      <Field label="Other email addresses" hint="Optional, separate with commas" className="mt-3">
-        <Input value={other} onChange={(e) => setOther(e.target.value)} placeholder="name@umich.edu" />
-      </Field>
       <Field label="Note" className="mt-3">
         <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="e.g. Moved to make room for the new HER2 batch." />
       </Field>
       <p className="mt-3 text-xs text-slate-500">
-        This opens your own email program with the message written for you, so you can check it and press Send.
+        CryoManager emails them from the lab account, e.g. “{(profile?.full_name || 'You').split(' ')[0]} moved {moves[0].sample.sample_name} from {moves[0].fromBox.name}{positionLabel(moves[0].from.row, moves[0].from.col)} to {moves[0].toBox.name}{positionLabel(moves[0].to.row, moves[0].to.col)}”. Replies come to you.
       </p>
     </Modal>
   );
