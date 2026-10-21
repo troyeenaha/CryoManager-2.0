@@ -328,6 +328,28 @@ reset role;
 set role anon;
 select test.expect_error($q$select public.needs_password()$q$, '%permission denied%');
 
+-- ----- removing a person completely ---------------------------------------
+reset role;
+-- Max Member (b) created samples; remember what they look like
+create temp table before_rm as select id, version, updated_at, created_by from samples where created_by = '00000000-0000-0000-0000-00000000000b';
+grant select on before_rm to authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000c"}', false);
+set role authenticated;
+select test.expect_error($q$select public.remove_person('00000000-0000-0000-0000-00000000000b')$q$, '%Only an administrator%');
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+select test.expect_error($q$select public.remove_person(auth.uid())$q$, '%your own account%');
+select public.remove_person('00000000-0000-0000-0000-00000000000b');
+reset role;
+select test.expect((select count(*) = 0 from profiles where id = '00000000-0000-0000-0000-00000000000b')
+                   and (select count(*) = 0 from auth.users where id = '00000000-0000-0000-0000-00000000000b'), 'removed person has no account or login left');
+select test.expect((select count(*) > 0 from before_rm) and not exists (
+  select 1 from before_rm b join samples s using (id) where s.version <> b.version or s.updated_at <> b.updated_at or s.created_by is distinct from b.created_by),
+  'their samples are untouched (no new versions, history intact)');
+select test.expect((select count(*) = 1 from audit_log where entity_type = 'profile' and action = 'delete' and entity_label = 'member@umich.edu'), 'the removal itself is recorded');
+select test.expect((select count(*) > 0 from audit_log where actor_email = 'member@umich.edu'), 'their past actions still show who did them');
+
 reset role;
 \echo
 \echo 'ALL DATABASE TESTS PASSED'

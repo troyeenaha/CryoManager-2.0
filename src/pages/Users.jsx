@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ShieldOff, UserCheck, UserPlus, Users as UsersIcon } from 'lucide-react';
+import { Check, TriangleAlert, UserCheck, UserPlus, UserX, Users as UsersIcon } from 'lucide-react';
 import { AddPersonDialog, InvitationsList } from '../components/AddPerson.jsx';
 import { supabase, unwrap } from '../lib/supabase.js';
 import { useInventoryMutation, useProfiles } from '../api/data.js';
@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { friendlyError } from '../lib/errors.js';
 import { fmtDate, roleLabel } from '../lib/format.js';
-import { Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, PageHeader, Select, Spinner, StatusBadge } from '../components/ui.jsx';
+import { Alert, Button, Card, ConfirmDialog, EmptyState, ErrorState, Modal, PageHeader, Select, Spinner, StatusBadge } from '../components/ui.jsx';
 
 const ROLE_HELP = {
   admin: 'Everything, including users, storage structure, settings and the full audit log.',
@@ -21,6 +21,66 @@ async function updateProfile(id, values) {
   return rows[0];
 }
 
+/** Two steps: explain what happens, then ask "are you sure?" before deleting. */
+function RemovePersonDialog({ person, onClose }) {
+  const toast = useToast();
+  const [step, setStep] = useState(1);
+  const remove = useInventoryMutation(async (id) => unwrap(await supabase.rpc('remove_person', { p_user: id })));
+  const who = person.full_name || person.email;
+
+  async function confirmRemove() {
+    try {
+      await remove.mutateAsync(person.id);
+      toast.success(`${who} has been removed.`);
+      onClose();
+    } catch (err) {
+      toast.error(friendlyError(err));
+    }
+  }
+
+  if (step === 1) {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        size="sm"
+        title={`Remove ${who}?`}
+        footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" onClick={() => setStep(2)}>Continue</Button></>}
+      >
+        <div className="text-sm text-slate-600 space-y-3">
+          <p><strong>{who}</strong>{person.initials ? ` (${person.initials})` : ''} · {person.email}</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>Their account and login are deleted. They can't sign in any more.</li>
+            <li>They disappear from the Users list.</li>
+            <li>The samples they added and the history of what they did <strong>stay</strong> as they are.</li>
+            <li>You can invite the same email again later if needed.</li>
+          </ul>
+        </div>
+      </Modal>
+    );
+  }
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      busy={remove.isPending}
+      size="sm"
+      title="Are you sure?"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={remove.isPending}>No, keep {person.full_name ? person.full_name.split(' ')[0] : 'them'}</Button>
+          <Button variant="danger" onClick={confirmRemove} loading={remove.isPending}><UserX className="h-4 w-4" /> Yes, remove permanently</Button>
+        </>
+      }
+    >
+      <div className="flex gap-3 text-sm text-slate-700">
+        <TriangleAlert className="h-5 w-5 text-red-500 shrink-0" />
+        <p>This permanently removes <strong>{who}</strong> ({person.email}). It can't be undone.</p>
+      </div>
+    </Modal>
+  );
+}
+
 export default function UsersPage() {
   const { profile: me } = useAuth();
   const toast = useToast();
@@ -28,6 +88,7 @@ export default function UsersPage() {
   const [confirm, setConfirm] = useState(null);
   const [roleFor, setRoleFor] = useState({}); // pending user id -> chosen role
   const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState(null); // person being removed
   const mutate = useInventoryMutation(({ id, values }) => updateProfile(id, values));
 
   async function apply(user, values, message) {
@@ -86,7 +147,7 @@ export default function UsersPage() {
                   <Button onClick={() => apply(u, { status: 'active', role: roleFor[u.id] || 'member' }, `${u.email} approved as ${roleLabel[roleFor[u.id] || 'member']}.`)} disabled={mutate.isPending}>
                     <Check className="h-4 w-4" /> Approve
                   </Button>
-                  <Button variant="secondary" onClick={() => setConfirm({ user: u, values: { status: 'disabled' }, title: 'Decline access?', label: 'Decline' })} disabled={mutate.isPending}>
+                  <Button variant="secondary" onClick={() => setRemoving(u)} disabled={mutate.isPending}>
                     Decline
                   </Button>
                 </div>
@@ -146,16 +207,18 @@ export default function UsersPage() {
                         <td className="px-4 py-3"><StatusBadge status={u.status} /></td>
                         <td className="px-4 py-3 hidden md:table-cell text-slate-500">{fmtDate(u.approved_at)}</td>
                         <td className="px-4 py-3 text-right">
-                          {u.status === 'active' ? (
+                          <div className="flex justify-end gap-1">
+                            {u.status === 'disabled' && (
+                              <Button variant="ghost" size="sm" onClick={() => apply(u, { status: 'active' }, `${u.email} can sign in again.`)}>
+                                <UserCheck className="h-4 w-4" /> Restore
+                              </Button>
+                            )}
                             <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" disabled={self}
-                              onClick={() => setConfirm({ user: u, values: { status: 'disabled' }, title: 'Remove access?', label: 'Remove access' })}>
-                              <ShieldOff className="h-4 w-4" /> Remove
+                              title={self ? 'You cannot remove your own account' : undefined}
+                              onClick={() => setRemoving(u)}>
+                              <UserX className="h-4 w-4" /> Remove
                             </Button>
-                          ) : (
-                            <Button variant="ghost" size="sm" onClick={() => apply(u, { status: 'active' }, `${u.email} can sign in again.`)}>
-                              <UserCheck className="h-4 w-4" /> Restore
-                            </Button>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -166,10 +229,12 @@ export default function UsersPage() {
           </Card>
         )}
         <Alert tone="info" className="mt-4">
-          Removing access takes effect immediately: the database stops returning data to that account on its next request.
-          Their past changes stay in the audit history. To delete a login completely, use Supabase → Authentication → Users.
+          Removing someone deletes their account and login straight away. The samples they added and the history
+          of what they did stay exactly as they are. You can invite the same email again later.
         </Alert>
       </section>
+
+      {removing && <RemovePersonDialog person={removing} onClose={() => setRemoving(null)} />}
 
       <ConfirmDialog
         open={Boolean(confirm)}
