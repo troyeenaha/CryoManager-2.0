@@ -19,7 +19,7 @@ function Gate() {
   if (!session) return <LoginPage />;
   if (recovering) return <SetNewPasswordPage />;
   if (!profile || !isActive) return <AccessPendingPage />;
-  if (profile.password_set === false) return <FinishSetupPage />;
+  if (profile.needs_password) return <FinishSetupPage />;
   if (!profile.initials) return <SetInitialsPage />;
 
   return (

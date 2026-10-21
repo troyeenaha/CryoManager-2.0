@@ -24,7 +24,14 @@ export function AuthProvider({ children }) {
     queryKey: ['me', userId],
     enabled: Boolean(userId),
     refetchInterval: (q) => (q.state.data?.status === 'pending' ? 30_000 : false),
-    queryFn: async () => unwrap(await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()),
+    queryFn: async () => {
+      const profile = unwrap(await supabase.from('profiles').select('*').eq('id', userId).maybeSingle());
+      if (!profile) return profile;
+      // Ask the login system whether this person still has to choose a password
+      // (true for anyone who came in through an approval or invitation email).
+      const { data: needs, error } = await supabase.rpc('needs_password');
+      return { ...profile, needs_password: error ? false : Boolean(needs) };
+    },
   });
 
   const signOut = useCallback(async () => {

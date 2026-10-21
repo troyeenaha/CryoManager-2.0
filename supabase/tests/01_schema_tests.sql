@@ -315,6 +315,19 @@ select test.expect((select count(*) = 0 from audit_log where entity_type = 'tank
 reset role;
 select test.expect((select count(*) = 1 from invitations where email = 'new.person@gmail.com' and accepted_at is not null), 'approval marked as used');
 
+-- ----- needs_password -----------------------------------------------------
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a2"}', false);
+set role authenticated;
+select test.expect((select public.needs_password()), 'someone who came in by email link must choose a password');
+reset role;
+update auth.users set encrypted_password = '$2a$hash' where id = '00000000-0000-0000-0000-0000000000a2';
+set role authenticated;
+select test.expect((select not public.needs_password()), 'once a password is set they are not asked again');
+reset role;
+set role anon;
+select test.expect_error($q$select public.needs_password()$q$, '%permission denied%');
+
 reset role;
 \echo
 \echo 'ALL DATABASE TESTS PASSED'

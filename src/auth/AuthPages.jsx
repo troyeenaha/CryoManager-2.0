@@ -195,7 +195,7 @@ export function FinishSetupPage() {
       const { error: pwErr } = await supabase.auth.updateUser({ password: form.pw });
       if (pwErr) throw pwErr;
       const { error: pErr } = await supabase.from('profiles')
-        .update({ full_name: `${form.first.trim()} ${form.last.trim()}`, initials: cleanInitials(form.initials), password_set: true })
+        .update({ full_name: `${form.first.trim()} ${form.last.trim()}`, initials: cleanInitials(form.initials) })
         .eq('id', profile.id);
       if (pErr) throw pErr;
       await refreshProfile();
