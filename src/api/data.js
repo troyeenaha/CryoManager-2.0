@@ -51,6 +51,45 @@ export const useBoxes = () =>
       unwrap(await supabase.from('box_summary').select('*')).sort(byNatural('tank_name', 'rack_name', 'name')),
   });
 
+// Fields the sample form remembers and suggests while typing.
+export const SUGGEST_FIELDS = [
+  'sample_name', 'transfected_with', 'media', 'cell_line_origin', 'genetic_modifications',
+  'selection_marker', 'antibiotic_resistance', 'project', 'researcher_responsible',
+];
+
+/**
+ * Everything typed before (including vials since taken out), per field:
+ * { sample_name: ['EO771 HER2', 'MDA-MB-231', …], … }. Spellings that differ
+ * only in capitals or spaces count as one, shown the way most people typed it;
+ * the most used come first.
+ */
+export const useSampleSuggestions = () =>
+  useQuery({
+    queryKey: ['samples', 'suggestions'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const rows = await fetchAll('samples', (q) => q, SUGGEST_FIELDS.join(','));
+      const out = {};
+      for (const field of SUGGEST_FIELDS) {
+        const groups = new Map(); // normalized -> { total, spellings: Map(spelling -> count) }
+        for (const r of rows) {
+          const v = String(r[field] ?? '').trim().replace(/\s+/g, ' ');
+          if (!v) continue;
+          const k = v.toLowerCase();
+          const g = groups.get(k) || { total: 0, spellings: new Map() };
+          g.total += 1;
+          g.spellings.set(v, (g.spellings.get(v) || 0) + 1);
+          groups.set(k, g);
+        }
+        out[field] = [...groups.values()]
+          .map((g) => ({ total: g.total, value: [...g.spellings].sort((a, b) => b[1] - a[1])[0][0] }))
+          .sort((a, b) => b.total - a.total || natural.compare(a.value, b.value))
+          .map((g) => g.value);
+      }
+      return out;
+    },
+  });
+
 /**
  * Adds the missing boxes to racks, named like rack A: rack B gets B1, B2 …
  * up to the rack's capacity. One statement, so either all are added or none.

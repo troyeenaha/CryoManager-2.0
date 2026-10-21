@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { insertSamples, saveRow, useInventoryMutation, useProfiles } from '../api/data.js';
+import { SUGGEST_FIELDS, insertSamples, saveRow, useInventoryMutation, useProfiles, useSampleSuggestions } from '../api/data.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { useFormSubmit } from './useFormSubmit.js';
 import { positionLabel } from '../lib/grid.js';
@@ -22,6 +22,10 @@ const TEXT_FIELDS = [
 export default function SampleForm({ box, positions = [], sample, onClose, onSaved }) {
   const { profile } = useAuth();
   const { data: people } = useProfiles();
+  const { data: suggestions } = useSampleSuggestions();
+  // Remembered values for a field, as a browser suggestion list (shown while typing).
+  const listId = (k) => `suggest-${k}`;
+  const suggest = (k) => (suggestions?.[k]?.length ? { list: listId(k), autoComplete: 'off' } : {});
   const isNew = !sample;
   const slots = isNew ? positions : [{ row: sample.row_num, col: sample.col_num }];
   const gridNames = slots.map((p) => `${box.name}${positionLabel(p.row, p.col)}`);
@@ -139,7 +143,7 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
         </Field>
 
         <Field label="Sample Name / Cell Type" required error={err('sample_name')}>
-          <Input value={form.sample_name} onChange={set('sample_name')} placeholder="e.g. EO771 HER2" maxLength={120} />
+          <Input value={form.sample_name} onChange={set('sample_name')} placeholder="e.g. EO771 HER2" maxLength={120} {...suggest('sample_name')} />
         </Field>
 
         <div className="grid sm:grid-cols-2 gap-4">
@@ -155,7 +159,7 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
           </Field>
           {form.transfected === true && (
             <Field label="Transfected With" required error={err('transfected_with')}>
-              <Input value={form.transfected_with} onChange={set('transfected_with')} placeholder="e.g. pLenti-HER2, GFP-Luc" maxLength={200} autoFocus />
+              <Input value={form.transfected_with} onChange={set('transfected_with')} placeholder="e.g. pLenti-HER2, GFP-Luc" maxLength={200} autoFocus {...suggest('transfected_with')} />
             </Field>
           )}
         </div>
@@ -193,7 +197,7 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
               <option value={CUSTOM}>Custom…</option>
             </Select>
             {customMedia && (
-              <Input value={form.media} onChange={set('media')} placeholder="Type the freezing media" maxLength={200} aria-label="Custom freezing media" autoFocus />
+              <Input value={form.media} onChange={set('media')} placeholder="Type the freezing media" maxLength={200} aria-label="Custom freezing media" autoFocus {...suggest('media')} />
             )}
           </div>
         </Field>
@@ -211,19 +215,24 @@ export default function SampleForm({ box, positions = [], sample, onClose, onSav
           {advanced && (
             <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 gap-4 border-t border-slate-100">
               <Field label="Researcher Responsible">
-                <Input value={form.researcher_responsible} onChange={set('researcher_responsible')} maxLength={120} />
+                <Input value={form.researcher_responsible} onChange={set('researcher_responsible')} maxLength={120} {...suggest('researcher_responsible')} />
               </Field>
               <Field label="Date Frozen"><Input type="date" value={form.date_frozen || ''} onChange={set('date_frozen')} max={todayISO()} /></Field>
               <Field label="Date Added to Inventory"><Input type="date" value={form.date_added || ''} onChange={set('date_added')} max={todayISO()} /></Field>
-              <Field label="Cell Line Origin"><Input value={form.cell_line_origin} onChange={set('cell_line_origin')} placeholder="e.g. Mouse, C57BL/6 mammary" maxLength={200} /></Field>
-              <Field label="Research Project"><Input value={form.project} onChange={set('project')} maxLength={200} /></Field>
-              <Field label="Genetic Modifications" className="sm:col-span-2"><Input value={form.genetic_modifications} onChange={set('genetic_modifications')} maxLength={300} /></Field>
-              <Field label="Selection Marker"><Input value={form.selection_marker} onChange={set('selection_marker')} maxLength={120} /></Field>
-              <Field label="Antibiotic Resistance"><Input value={form.antibiotic_resistance} onChange={set('antibiotic_resistance')} placeholder="e.g. Puromycin" maxLength={120} /></Field>
+              <Field label="Cell Line Origin"><Input value={form.cell_line_origin} onChange={set('cell_line_origin')} {...suggest('cell_line_origin')} placeholder="e.g. Mouse, C57BL/6 mammary" maxLength={200} /></Field>
+              <Field label="Research Project"><Input value={form.project} onChange={set('project')} {...suggest('project')} maxLength={200} /></Field>
+              <Field label="Genetic Modifications" className="sm:col-span-2"><Input value={form.genetic_modifications} onChange={set('genetic_modifications')} {...suggest('genetic_modifications')} maxLength={300} /></Field>
+              <Field label="Selection Marker"><Input value={form.selection_marker} onChange={set('selection_marker')} {...suggest('selection_marker')} maxLength={120} /></Field>
+              <Field label="Antibiotic Resistance"><Input value={form.antibiotic_resistance} onChange={set('antibiotic_resistance')} {...suggest('antibiotic_resistance')} placeholder="e.g. Puromycin" maxLength={120} /></Field>
               <Field label="Notes" className="sm:col-span-2"><Textarea value={form.notes} onChange={set('notes')} maxLength={4000} /></Field>
             </div>
           )}
         </div>
+        {SUGGEST_FIELDS.map((k) => (
+          <datalist key={k} id={listId(k)}>
+            {(suggestions?.[k] || []).slice(0, 200).map((v) => <option key={v} value={v} />)}
+          </datalist>
+        ))}
       </form>
     </Modal>
   );
