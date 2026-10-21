@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+env:
+  # Run GitHub's own actions on the current Node version (Node 20 is being retired).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   backup:
-    runs-on: ubuntu-latest
+    # Pinned so a new Ubuntu release can't silently break the PostgreSQL client install.
+    runs-on: ubuntu-24.04
     steps:
       - name: Install PostgreSQL 17 client
         run: |
