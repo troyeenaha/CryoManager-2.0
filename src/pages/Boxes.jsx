@@ -186,7 +186,7 @@ export default function BoxesPage() {
     <>
       <PageHeader
         title="Boxes"
-        subtitle="Every storage box by rack, with free positions at a glance"
+        subtitle="Every storage box by rack"
         actions={isAdmin && <Button onClick={() => setEditing({})} disabled={!racks.length}><Plus className="h-4 w-4" /> Add Box</Button>}
       />
       <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:items-center">

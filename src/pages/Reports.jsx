@@ -221,7 +221,7 @@ function SearchSection() {
           <SearchInput
             value={term}
             onChange={setTerm}
-            placeholder="Search by cell line, construct, person, box or grid name (e.g. HER2, Greg Thurber, A1B4)"
+            placeholder="Search by cell line, what it was transfected with, person, box or grid name (e.g. HER2, Greg Thurber, A1B4)"
             className="flex-1"
           />
           <div className="flex gap-2">
