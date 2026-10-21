@@ -319,10 +319,10 @@ select test.expect((select count(*) = 1 from invitations where email = 'new.pers
 reset role;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a2"}', false);
 set role authenticated;
-select test.expect((select public.needs_password()), 'someone who came in by email link must choose a password');
 reset role;
-update auth.users set encrypted_password = '$2a$hash' where id = '00000000-0000-0000-0000-0000000000a2';
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a2"}', false);
 set role authenticated;
+select public.mark_password_set();
 select test.expect((select not public.needs_password()), 'once a password is set they are not asked again');
 reset role;
 set role anon;
@@ -349,6 +349,29 @@ select test.expect((select count(*) > 0 from before_rm) and not exists (
   'their samples are untouched (no new versions, history intact)');
 select test.expect((select count(*) = 1 from audit_log where entity_type = 'profile' and action = 'delete' and entity_label = 'member@umich.edu'), 'the removal itself is recorded');
 select test.expect((select count(*) > 0 from audit_log where actor_email = 'member@umich.edu'), 'their past actions still show who did them');
+
+-- ----- password setup after an emailed link (0009) -------------------------
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+insert into invitations (email, full_name, initials, role, status) values ('tia@gmail.com', 'Tia Mann', 'TM', 'member', 'invited');
+reset role;
+-- Supabase gives link-created accounts a hidden random password:
+insert into auth.users (id, email, encrypted_password) values ('00000000-0000-0000-0000-0000000000b1', 'tia@gmail.com', '$2a$random');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1"}', false);
+set role authenticated;
+select test.expect((select public.needs_password()), 'invited person with a hidden random password is still asked to choose one');
+select public.mark_password_set();
+select test.expect((select not public.needs_password()), 'after choosing a password they are not asked again');
+reset role;
+-- accounts that existed before 0006 were marked as having a password then; 0009 leaves them alone
+update profiles set password_set = true where email = 'admin@umich.edu';
+\i supabase/migrations/0009_password_setup_fix.sql
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+select test.expect((select not public.needs_password()), 'existing admin is never asked, even after re-running 0009');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1"}', false);
+select test.expect((select not public.needs_password()), 're-running 0009 does not re-ask someone who already chose a password');
 
 reset role;
 \echo

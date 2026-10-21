@@ -198,6 +198,9 @@ export function FinishSetupPage() {
         .update({ full_name: `${form.first.trim()} ${form.last.trim()}`, initials: cleanInitials(form.initials) })
         .eq('id', profile.id);
       if (pErr) throw pErr;
+      // Remember that they've chosen their own password, so this page isn't shown again.
+      const { error: mErr } = await supabase.rpc('mark_password_set');
+      if (mErr) throw mErr;
       await refreshProfile();
     } catch (err) {
       setError(friendlyError(err));
