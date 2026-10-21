@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DatabaseBackup, FileJson, FileSpreadsheet, KeyRound, Save, UserRound } from 'lucide-react';
+import { BellRing, DatabaseBackup, FileJson, FileSpreadsheet, KeyRound, Save, UserRound } from 'lucide-react';
 import { supabase, unwrap } from '../lib/supabase.js';
 import { useInventoryMutation, useSettings } from '../api/data.js';
 import { buildFullExport } from '../api/reports.js';
@@ -114,6 +114,38 @@ function LabDefaults() {
   );
 }
 
+function RequestAlerts() {
+  const { data, isLoading } = useSettings();
+  const save = useInventoryMutation(async (v) => unwrap(await supabase.from('app_settings').update(v).eq('id', 1).select().single()));
+  const { run, busy, error } = useFormSubmit();
+  const [email, setEmail] = useState(null);
+  if (isLoading) return null;
+  const value = email ?? data?.alert_email ?? '';
+  return (
+    <Section icon={BellRing} title="Access request alerts" description="Who gets an email when someone asks for access on the sign-in page.">
+      <form
+        className="flex flex-col sm:flex-row gap-3 sm:items-end"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const v = value.trim().toLowerCase();
+          if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return;
+          run(() => save.mutateAsync({ alert_email: v }), { success: v ? `Alerts will go to ${v}.` : 'Email alerts turned off.' });
+        }}
+      >
+        <Field label="Send alerts to" className="flex-1" hint="Must be the email you used to create your free Resend account">
+          <Input type="email" value={value} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+        </Field>
+        <Button type="submit" variant="secondary" loading={busy}><Save className="h-4 w-4" /> Save</Button>
+      </form>
+      {error && <Alert tone="error" className="mt-3">{error}</Alert>}
+      <p className="mt-3 text-xs text-slate-500">
+        Requests always appear on the Users page. Emailed alerts also need the one-time Resend setup in
+        <code className="mx-1 px-1 bg-slate-100 rounded">docs/EMAIL_SETUP.md</code>.
+      </p>
+    </Section>
+  );
+}
+
 function DataExport() {
   const { isAdmin } = useAuth();
   const toast = useToast();
@@ -165,6 +197,7 @@ export default function SettingsPage() {
       <div className="space-y-6 max-w-3xl">
         <ProfileSection />
         {isAdmin && <LabDefaults />}
+        {isAdmin && <RequestAlerts />}
         <DataExport />
       </div>
     </>

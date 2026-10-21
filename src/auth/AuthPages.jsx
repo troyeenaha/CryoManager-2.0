@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Clock, KeyRound, LogOut, ShieldOff } from 'lucide-react';
+import { Clock, KeyRound, LogOut, MailCheck, ShieldOff } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { requestAccess } from '../api/data.js';
 import { friendlyError } from '../lib/errors.js';
 import { useAuth } from './AuthProvider.jsx';
 import { cleanInitials, suggestInitials } from '../lib/format.js';
 import { BrandMark, LabLogo } from '../components/Brand.jsx';
-import { Button, Field, Input, Alert } from '../components/ui.jsx';
+import { Alert, Button, Field, Input, cx } from '../components/ui.jsx';
 
 function AuthShell({ children, title, subtitle }) {
   return (
@@ -19,9 +20,9 @@ function AuthShell({ children, title, subtitle }) {
           </div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-7">
-          <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+          {title && <h1 className="text-lg font-semibold text-slate-900">{title}</h1>}
           {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
-          <div className="mt-6">{children}</div>
+          <div className={title ? 'mt-6' : ''}>{children}</div>
         </div>
         <div className="mt-8"><LabLogo className="max-h-20" /></div>
       </div>
@@ -29,20 +30,34 @@ function AuthShell({ children, title, subtitle }) {
   );
 }
 
+const nameParts = (full) => {
+  const p = (full || '').trim().split(/\s+/);
+  return { first: p[0] || '', last: p.slice(1).join(' ') };
+};
+
+/** First page anyone sees: "Sign in" or "New here? Request access". */
 export function LoginPage() {
-  // An invite link (?signup=1&email=…&name=…&initials=…) opens sign-up pre-filled.
-  const invite = new URLSearchParams(window.location.search);
-  const [mode, setMode] = useState(invite.get('signup') ? 'signup' : 'signin'); // signin | signup | forgot
-  const [form, setForm] = useState({
-    name: invite.get('name') || '',
-    initials: cleanInitials(invite.get('initials') || ''),
-    email: invite.get('email') || '',
-    password: '',
+  const params = new URLSearchParams(window.location.search);
+  const [tab, setTab] = useState(params.get('signup') ? 'request' : 'signin'); // signin | request | forgot
+  const [sent, setSent] = useState(null); // result of a request
+  const [form, setForm] = useState(() => {
+    const n = nameParts(params.get('name'));
+    return { first: n.first, last: n.last, initials: cleanInitials(params.get('initials') || ''), email: params.get('email') || '', password: '' };
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setName = (k) => (e) => {
+    const v = e.target.value;
+    setForm((f) => {
+      const next = { ...f, [k]: v };
+      const before = suggestInitials(`${f.first} ${f.last}`);
+      if (!f.initials || f.initials === before) next.initials = suggestInitials(`${next.first} ${next.last}`);
+      return next;
+    });
+  };
+  const go = (t) => { setTab(t); setError(''); setNotice(''); setSent(null); };
 
   async function submit(e) {
     e.preventDefault();
@@ -51,29 +66,19 @@ export function LoginPage() {
     setError('');
     setNotice('');
     try {
-      if (mode === 'signin') {
-        const { error: err } = await supabase.auth.signInWithPassword({
-          email: form.email.trim(), password: form.password,
-        });
+      if (tab === 'signin') {
+        const { error: err } = await supabase.auth.signInWithPassword({ email: form.email.trim(), password: form.password });
         if (err) throw err;
-      } else if (mode === 'signup') {
-        if (form.password.length < 8) throw new Error('Use a password of at least 8 characters.');
+      } else if (tab === 'request') {
+        if (!form.first.trim() || !form.last.trim()) throw new Error('Please enter your first and last name.');
         if (!cleanInitials(form.initials)) throw new Error('Please enter your initials (as written on your tubes).');
-        const { error: err } = await supabase.auth.signUp({
-          email: form.email.trim(),
-          password: form.password,
-          options: { data: { full_name: form.name.trim(), initials: cleanInitials(form.initials) }, emailRedirectTo: window.location.origin },
-        });
-        if (err) throw err;
-        setNotice('Account created. Check your email and click the confirmation link, then sign in. If an administrator added you, you can start right away; otherwise they will approve your access.');
-        setMode('signin');
+        const result = await requestAccess({ email: form.email, fullName: `${form.first.trim()} ${form.last.trim()}`, initials: form.initials });
+        setSent(result);
       } else {
-        const { error: err } = await supabase.auth.resetPasswordForEmail(form.email.trim(), {
-          redirectTo: `${window.location.origin}/`,
-        });
+        const { error: err } = await supabase.auth.resetPasswordForEmail(form.email.trim(), { redirectTo: `${window.location.origin}/` });
         if (err) throw err;
-        setNotice('If that email has an account, a password-reset link is on its way.');
-        setMode('signin');
+        setNotice('If that email has an account, a link to choose a new password is on its way.');
+        setTab('signin');
       }
     } catch (err) {
       setError(friendlyError(err));
@@ -82,65 +87,144 @@ export function LoginPage() {
     }
   }
 
-  const titles = {
-    signin: ['Sign in', 'Use your lab account to access the inventory.'],
-    signup: invite.get('signup')
-      ? ['Create your account', "You've been added to CryoManager. Choose a password to finish; use the email address you were invited with."]
-      : ['Request access', 'Create an account. A lab administrator must approve it before you can see the inventory.'],
-    forgot: ['Reset password', 'We will email you a secure link to choose a new password.'],
-  };
+  if (sent) {
+    const msg = {
+      requested: ['Request sent', `Thanks, ${form.first}. A lab administrator will review your request. Once you're approved you'll get an email from CryoManager. Click the link in it to confirm your email address and choose your password.`],
+      already_requested: ['Request already received', 'Your request is waiting for an administrator. You will get an email as soon as you are approved.'],
+      already_invited: ['You have already been invited', 'Look in your inbox (and spam folder) for the email from CryoManager, and click the link in it to set up your account.'],
+      has_account: ['You already have an account', 'Sign in with your email and password. If you forgot your password, use "Forgot password?".'],
+    }[sent] || ['Request sent', ''];
+    return (
+      <AuthShell title={msg[0]} subtitle={msg[1]}>
+        <div className="flex items-center gap-3 rounded-xl bg-brand-50 border border-brand-100 p-4">
+          {sent === 'has_account' ? <KeyRound className="h-5 w-5 text-brand-700" /> : <MailCheck className="h-5 w-5 text-brand-700" />}
+          <div className="text-sm">
+            <div className="font-medium text-slate-900">{form.first} {form.last} <span className="text-brand-800">({cleanInitials(form.initials)})</span></div>
+            <div className="text-slate-500">{form.email.trim().toLowerCase()}</div>
+          </div>
+        </div>
+        <Button variant="secondary" className="w-full mt-5" onClick={() => go('signin')}>Back to sign in</Button>
+      </AuthShell>
+    );
+  }
 
   return (
-    <AuthShell title={titles[mode][0]} subtitle={titles[mode][1]}>
+    <AuthShell>
+      {tab !== 'forgot' ? (
+        <div role="tablist" aria-label="Sign in or request access" className="grid grid-cols-2 rounded-xl bg-slate-100 p-1 mb-6">
+          {[['signin', 'Sign in'], ['request', 'New here? Request access']].map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => go(id)}
+              className={cx('rounded-lg py-2 text-sm font-medium transition', tab === id ? 'bg-white text-brand-800 shadow-sm' : 'text-slate-600 hover:text-slate-900')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mb-5">
+          <h1 className="text-lg font-semibold text-slate-900">Reset password</h1>
+          <p className="text-sm text-slate-500 mt-1">We'll email you a secure link to choose a new password.</p>
+        </div>
+      )}
+
+      {tab === 'request' && (
+        <p className="text-sm text-slate-500 -mt-2 mb-5">
+          Tell us who you are. A lab administrator approves your request, then you'll get an email to confirm your address and choose a password.
+        </p>
+      )}
+
       <form onSubmit={submit} className="space-y-4">
         {notice && <Alert tone="success">{notice}</Alert>}
         {error && <Alert tone="error">{error}</Alert>}
-        {mode === 'signup' && (
-          <div className="grid grid-cols-[1fr_7rem] gap-3">
-            <Field label="Full name" required>
-              <Input
-                value={form.name}
-                onChange={(e) => {
-                  const name = e.target.value;
-                  setForm((f) => ({
-                    ...f, name,
-                    initials: !f.initials || f.initials === suggestInitials(f.name) ? suggestInitials(name) : f.initials,
-                  }));
-                }}
-                required
-                autoComplete="name"
-              />
+        {tab === 'request' && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="First name" required><Input value={form.first} onChange={setName('first')} autoComplete="given-name" /></Field>
+              <Field label="Last name" required><Input value={form.last} onChange={setName('last')} autoComplete="family-name" /></Field>
+            </div>
+            <Field label="Initials" required hint="As you write them on your tubes, e.g. GT">
+              <Input value={form.initials} onChange={(e) => setForm((f) => ({ ...f, initials: cleanInitials(e.target.value) }))} maxLength={4} className="uppercase font-semibold max-w-28" />
             </Field>
-            <Field label="Initials" required hint="As on your tubes">
-              <Input value={form.initials} onChange={(e) => setForm((f) => ({ ...f, initials: cleanInitials(e.target.value) }))} placeholder="TN" maxLength={4} className="uppercase font-semibold" />
-            </Field>
-          </div>
+          </>
         )}
-        <Field label="Email" required>
+        <Field label="Email" required hint={tab === 'request' ? 'Your university email is best' : undefined}>
           <Input type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
         </Field>
-        {mode !== 'forgot' && (
-          <Field label="Password" required hint={mode === 'signup' ? 'At least 8 characters' : undefined}>
-            <Input
-              type="password" value={form.password} onChange={set('password')} required
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            />
+        {tab === 'signin' && (
+          <Field label="Password" required>
+            <Input type="password" value={form.password} onChange={set('password')} required autoComplete="current-password" />
           </Field>
         )}
         <Button type="submit" className="w-full" loading={busy}>
-          {mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
+          {tab === 'signin' ? 'Sign in' : tab === 'request' ? 'Send request' : 'Send reset link'}
         </Button>
       </form>
-      <div className="mt-6 flex flex-wrap justify-between gap-2 text-sm">
-        {mode !== 'signin' ? (
-          <button className="text-brand-700 hover:underline" onClick={() => setMode('signin')}>Back to sign in</button>
-        ) : (
-          <>
-            <button className="text-brand-700 hover:underline" onClick={() => setMode('signup')}>Request an account</button>
-            <button className="text-slate-500 hover:underline" onClick={() => setMode('forgot')}>Forgot password?</button>
-          </>
-        )}
+      <div className="mt-5 text-sm text-center">
+        {tab === 'signin' && <button className="text-slate-500 hover:underline" onClick={() => go('forgot')}>Forgot password?</button>}
+        {tab === 'forgot' && <button className="text-brand-700 hover:underline" onClick={() => go('signin')}>Back to sign in</button>}
       </div>
+    </AuthShell>
+  );
+}
+
+/**
+ * After someone clicks the link in their approval / invitation email (which
+ * also confirms their address), they finish here: name, initials, password.
+ */
+export function FinishSetupPage() {
+  const { profile, refreshProfile, signOut } = useAuth();
+  const n = nameParts(profile?.full_name);
+  const [form, setForm] = useState({ first: n.first, last: n.last, initials: profile?.initials || suggestInitials(profile?.full_name), pw: '', pw2: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.first.trim() || !form.last.trim()) return setError('Please enter your first and last name.');
+    if (!cleanInitials(form.initials)) return setError('Please enter your initials.');
+    if (form.pw.length < 8) return setError('Use a password of at least 8 characters.');
+    if (form.pw !== form.pw2) return setError('The two passwords do not match.');
+    setBusy(true);
+    setError('');
+    try {
+      const { error: pwErr } = await supabase.auth.updateUser({ password: form.pw });
+      if (pwErr) throw pwErr;
+      const { error: pErr } = await supabase.from('profiles')
+        .update({ full_name: `${form.first.trim()} ${form.last.trim()}`, initials: cleanInitials(form.initials), password_set: true })
+        .eq('id', profile.id);
+      if (pErr) throw pErr;
+      await refreshProfile();
+    } catch (err) {
+      setError(friendlyError(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <AuthShell title="Welcome! Finish setting up your account" subtitle={`Your email (${profile?.email}) is confirmed. Check your details and choose a password.`}>
+      <form onSubmit={submit} className="space-y-4">
+        {error && <Alert tone="error">{error}</Alert>}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="First name" required><Input value={form.first} onChange={set('first')} autoComplete="given-name" /></Field>
+          <Field label="Last name" required><Input value={form.last} onChange={set('last')} autoComplete="family-name" /></Field>
+        </div>
+        <Field label="Initials" required hint="Shown as Who Passaged on samples">
+          <Input value={form.initials} onChange={(e) => setForm((f) => ({ ...f, initials: cleanInitials(e.target.value) }))} maxLength={4} className="uppercase font-semibold max-w-28" />
+        </Field>
+        <Field label="Choose a password" required hint="At least 8 characters">
+          <Input type="password" value={form.pw} onChange={set('pw')} autoComplete="new-password" />
+        </Field>
+        <Field label="Type it again" required>
+          <Input type="password" value={form.pw2} onChange={set('pw2')} autoComplete="new-password" />
+        </Field>
+        <Button type="submit" className="w-full" loading={busy}>Finish and open CryoManager</Button>
+      </form>
+      <button className="mt-5 w-full text-center text-sm text-slate-500 hover:underline" onClick={signOut}>Not you? Sign out</button>
     </AuthShell>
   );
 }

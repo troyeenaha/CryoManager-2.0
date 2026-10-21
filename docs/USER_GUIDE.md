@@ -1,9 +1,13 @@
 # CryoManager: quick guide for lab members
 
-**Getting access.** Open the CryoManager link and click **Request an account**. Confirm your email.
-A lab administrator will then approve you. The page updates on its own once they do.
+**Getting access.** Open the CryoManager link and click **New here? Request access**. Enter your first
+and last name, your initials (as you write them on tubes, e.g. GT) and your email. An administrator
+approves you; you then get an email. Click the link in it (this confirms your email address) and choose a
+password. If an administrator added you directly, you'll get that email straight away.
 
-**Find a sample.** Go to **Reports** and type anything into *Find a sample*: name, cell line, grid name
+**My Activity.** The **My Activity** page lists everything you've added, moved, edited or taken out.
+
+**Find a sample.** Go to **Reports** and type one word into *Find cells*, e.g. *HER2*, *Greg*, *GT* or *A1B4*: name, cell line, grid name
 (A1B4), position (B7), box, researcher or passage number. Click a result to jump straight to its spot in the grid, highlighted in amber.
 
 **Add a sample.** **Grid View** → choose the box → click an empty (dashed) square → fill in the
@@ -14,7 +18,7 @@ form → **Save**. The grid name (e.g. A1B4) is filled in for you. Everything ab
 
 **Move samples.** Within the same box, drag a sample onto an empty square. To move one or many to another box: **Select samples** → click them (or a row letter) → **Move to another box** → choose the box → click the new squares (or **Fill first empty squares**) → **Move**. All of them move together, or none do.
 
-**Box nicknames.** A box can have a nickname (e.g. *Troyee 1*) as well as its official name (A1). Search finds it by either; grid names always use the official name (A1B4).
+**Box nicknames.** A box can have a nickname (e.g. *Greg 1*) as well as its official name (A1). Search finds it by either; grid names always use the official name (A1B4).
 
 **Take a sample out.** Click it (or select several) → **Take out** → choose **Move to another box** or **Take out of storage**, then *Used / thawed* or *Discarded* with a short reason. The slot becomes free, and the record stays searchable
 (Reports → Filters → Status).

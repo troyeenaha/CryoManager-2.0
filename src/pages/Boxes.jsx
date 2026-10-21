@@ -76,8 +76,8 @@ function BoxForm({ box, racks, defaultRackId, onClose }) {
           <Field label="Box Name" required error={touched && errors.name} hint="Official ID, unique in its rack (used in grid names like A1B4)">
           <Input value={form.name} onChange={set('name')} placeholder="e.g. A1" maxLength={40} />
         </Field>
-          <Field label="Nickname" hint="Optional, e.g. Troyee 1. Searchable too.">
-            <Input value={form.label} onChange={set('label')} placeholder="e.g. Troyee 1" maxLength={60} />
+          <Field label="Nickname" hint="Optional, e.g. Greg 1. Searchable too.">
+            <Input value={form.label} onChange={set('label')} placeholder="e.g. Greg 1" maxLength={60} />
           </Field>
         </div>
         <Field label="Rack" required error={touched && errors.rack_id}>

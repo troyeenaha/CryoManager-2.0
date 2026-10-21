@@ -14,7 +14,8 @@ export const isConfigured = Boolean(url && anonKey);
 // decides what each signed-in user may read or change.
 export const supabase = isConfigured
   ? createClient(url, anonKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      // 'implicit' so an emailed link works on any device, not only the one that sent it.
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
     })
   : null;
 

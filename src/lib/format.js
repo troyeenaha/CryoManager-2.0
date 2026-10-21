@@ -27,6 +27,6 @@ export const roleLabel = { admin: 'Administrator', member: 'Lab Member', viewer:
 /** "t.n" → "TN"; keeps letters only, max 4. */
 export const cleanInitials = (v) => (v || '').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 4);
 
-/** Suggest initials from a full name: "Troyee Naha" → "TN". */
+/** Suggest initials from a full name: "Greg Thurber" → "GT". */
 export const suggestInitials = (name) =>
   cleanInitials((name || '').trim().split(/\s+/).map((w) => w[0]).join(''));

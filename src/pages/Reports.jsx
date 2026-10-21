@@ -221,7 +221,7 @@ function SearchSection() {
           <SearchInput
             value={term}
             onChange={setTerm}
-            placeholder="Cell line, construct, person (name or initials), box nickname, grid name like A1B4…"
+            placeholder="Type any word: cell line, construct, person, box nickname, A1B4…"
             className="flex-1"
           />
           <div className="flex gap-2">
@@ -237,7 +237,7 @@ function SearchSection() {
           </div>
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          Use several words to narrow down. For example <em>HER2 Troyee</em> finds HER2 cells passaged by Troyee (TN).
+          One word is enough. For example <em>HER2</em>, <em>Greg</em>, <em>Thurber</em>, <em>GT</em> or <em>A1B4</em>. Add a second word to narrow it down, e.g. <em>HER2 Greg</em>.
         </p>
         {showFilters && (
           <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-4 border-t border-slate-100">

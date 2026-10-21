@@ -125,7 +125,7 @@ function wordGroup(word, people) {
 /**
  * Search the inventory. Every word in `term` must match something
  * (cell line, ID, grid name, box nickname, initials, a person's full name, …).
- * `people` (lab profiles) lets "Troyee" find samples passaged by "TN".
+ * `people` (lab profiles) lets "Greg" find samples passaged by "GT".
  */
 export async function searchSamples({
   term = '', status = 'active', transfected = 'any', researcher = '',
@@ -155,6 +155,24 @@ export async function searchSamples({
   const { data, error, count } = await q;
   if (error) throw error;
   return { rows: data, count: count ?? data.length };
+}
+
+/** Anyone (not signed in) asks for access. Returns 'requested' | 'already_requested' | 'already_invited' | 'has_account'. */
+export async function requestAccess({ email, fullName, initials }) {
+  return unwrap(await supabase.rpc('request_access', { p_email: email, p_full_name: fullName, p_initials: initials }));
+}
+
+/**
+ * Emails someone a secure CryoManager link (sent by Supabase). Clicking it
+ * confirms their address and signs them in, then they choose a password.
+ * Used when an admin approves a request or adds a person.
+ */
+export async function sendAccountEmail({ email, fullName, initials }) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, emailRedirectTo: `${window.location.origin}/`, data: { full_name: fullName, initials } },
+  });
+  if (error) throw error;
 }
 
 /** Fetch every row of a table/view (paged under the hood — no 1000-row cap). */

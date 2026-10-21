@@ -75,7 +75,11 @@ Every push to `main` now redeploys automatically.
 Optional: put the authorised Thurber Lab logo at `public/thurber-lab-logo.png`. It appears at the
 bottom of the sidebar automatically.
 
-## 6. Turn on backups
+## 6. Turn on email (required before inviting anyone)
+
+Follow [EMAIL_SETUP.md](EMAIL_SETUP.md). Without it, lab members won't receive their invitation emails.
+
+## 7. Turn on backups
 
 Do this before entering real inventory. See [BACKUP_AND_RECOVERY.md](BACKUP_AND_RECOVERY.md).
 

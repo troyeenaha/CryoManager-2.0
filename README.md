@@ -25,6 +25,7 @@ Supabase project → run one SQL file → make yourself admin → deploy on Verc
 - [docs/SETUP.md](docs/SETUP.md): first-time setup and deployment
 - [docs/BACKUP_AND_RECOVERY.md](docs/BACKUP_AND_RECOVERY.md): backups, restore tests and the recovery procedure
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it fits together, data rules, and where to change things
+- [docs/EMAIL_SETUP.md](docs/EMAIL_SETUP.md): free email setup for invitations and password resets
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): a one-page guide for lab members
 - [docs/COSTS.md](docs/COSTS.md): what this costs to run
 

@@ -279,6 +279,42 @@ set role authenticated;
 select test.expect((select count(*) = 0 from invitations), 'non-admins cannot see invitations');
 select test.expect_error($q$insert into invitations (email) values ('x@y.edu')$q$, '%row-level security%');
 
+-- ----- requesting access, approval, own activity --------------------------
+reset role;
+select set_config('request.jwt.claims', '{"role":"anon"}', false);
+set role anon;
+select test.expect((select public.request_access(' New.Person@Gmail.com ', 'Nora Person', 'n.p') = 'requested'), 'anyone can request access');
+select test.expect((select public.request_access('new.person@gmail.com', 'Nora Person', 'NP') = 'already_requested'), 'a second request is recognised');
+select test.expect((select public.request_access('admin@umich.edu', 'Ada', 'AA') = 'has_account'), 'existing accounts are told to sign in');
+select test.expect_error($q$select public.request_access('bad', 'X Y', 'XY')$q$, '%valid email%');
+select test.expect_error($q$select * from invitations$q$, '%permission denied%');
+reset role;
+-- signing up while still only "requested" does NOT let them in
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000a1', 'new.person@gmail.com');
+select test.expect((select status = 'pending' from profiles where email = 'new.person@gmail.com'), 'a requested (not approved) person stays pending');
+delete from profiles where email = 'new.person@gmail.com';
+delete from auth.users where email = 'new.person@gmail.com';
+-- admin approves → becomes an invitation; the email link creates the account (no password yet)
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a"}', false);
+set role authenticated;
+update invitations set status = 'invited', role = 'viewer' where email = 'new.person@gmail.com';
+reset role;
+insert into auth.users (id, email, encrypted_password) values ('00000000-0000-0000-0000-0000000000a2', 'new.person@gmail.com', '');
+select test.expect((select status = 'active' and role = 'viewer' and initials = 'NP' and full_name = 'Nora Person' and password_set = false
+                      from profiles where email = 'new.person@gmail.com'), 'approved person gets in with their details and must set a password');
+-- they set their password (allowed for themselves)
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a2"}', false);
+set role authenticated;
+select test.expect_rows($q$update profiles set password_set = true, full_name = 'Nora P. Person' where id = auth.uid()$q$, 1);
+-- my activity: a member sees their own non-sample activity too
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a2"}', false);
+set role authenticated;
+select test.expect((select count(*) >= 1 from audit_log where actor_id = auth.uid() and entity_type = 'profile'), 'people can read their own activity');
+select test.expect((select count(*) = 0 from audit_log where entity_type = 'tank'), 'but not other people''s non-sample activity');
+reset role;
+select test.expect((select count(*) = 1 from invitations where email = 'new.person@gmail.com' and accepted_at is not null), 'approval marked as used');
+
 reset role;
 \echo
 \echo 'ALL DATABASE TESTS PASSED'

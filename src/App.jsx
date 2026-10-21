@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { isConfigured } from './lib/supabase.js';
 import { AuthProvider, useAuth } from './auth/AuthProvider.jsx';
-import { AccessPendingPage, LoginPage, NotConfiguredPage, SetInitialsPage, SetNewPasswordPage } from './auth/AuthPages.jsx';
+import { AccessPendingPage, FinishSetupPage, LoginPage, NotConfiguredPage, SetInitialsPage, SetNewPasswordPage } from './auth/AuthPages.jsx';
 import Layout from './components/Layout.jsx';
 import { Spinner } from './components/ui.jsx';
 import TanksPage from './pages/Tanks.jsx';
@@ -11,6 +11,7 @@ import GridViewPage from './pages/GridView.jsx';
 import ReportsPage from './pages/Reports.jsx';
 import UsersPage from './pages/Users.jsx';
 import SettingsPage from './pages/Settings.jsx';
+import ActivityPage from './pages/Activity.jsx';
 
 function Gate() {
   const { loading, session, profile, isActive, isAdmin, recovering } = useAuth();
@@ -18,6 +19,7 @@ function Gate() {
   if (!session) return <LoginPage />;
   if (recovering) return <SetNewPasswordPage />;
   if (!profile || !isActive) return <AccessPendingPage />;
+  if (profile.password_set === false) return <FinishSetupPage />;
   if (!profile.initials) return <SetInitialsPage />;
 
   return (
@@ -30,6 +32,7 @@ function Gate() {
         <Route path="grid" element={<GridViewPage />} />
         <Route path="grid/:boxId" element={<GridViewPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="activity" element={<ActivityPage />} />
         <Route path="users" element={isAdmin ? <UsersPage /> : <Navigate to="/tanks" replace />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/tanks" replace />} />

@@ -67,11 +67,9 @@ export default function UsersPage() {
 
       <InvitationsList />
 
-      <section className="mb-8" aria-labelledby="pending-h">
-        <h2 id="pending-h" className="text-lg font-semibold text-slate-900 mb-3">Waiting for approval {pending.length > 0 && `(${pending.length})`}</h2>
-        {pending.length === 0 ? (
-          <p className="text-sm text-slate-500">No one is waiting. New people can request access from the sign-in page.</p>
-        ) : (
+      {pending.length > 0 && <section className="mb-8" aria-labelledby="pending-h">
+        <h2 id="pending-h" className="text-lg font-semibold text-slate-900 mb-3">Accounts waiting for approval ({pending.length})</h2>
+        {(
           <div className="space-y-3">
             {pending.map((u) => (
               <Card key={u.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -96,7 +94,7 @@ export default function UsersPage() {
             ))}
           </div>
         )}
-      </section>
+      </section>}
 
       <section aria-labelledby="all-h">
         <h2 id="all-h" className="text-lg font-semibold text-slate-900 mb-3">All users</h2>

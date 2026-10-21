@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
-  ChartColumn, Boxes, Container, Grid3x3, LayoutList, LogOut, Menu as MenuIcon, Settings, Users, X, WifiOff,
+  ChartColumn, Boxes, Container, Grid3x3, History, LayoutList, LogOut, Menu as MenuIcon, Settings, Users, X, WifiOff,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { BrandMark, LabLogo } from './Brand.jsx';
 import { roleLabel } from '../lib/format.js';
 import { useLiveInventory } from '../api/data.js';
+import { useInvitations } from './AddPerson.jsx';
 import { cx } from './ui.jsx';
 
 const NAV = [
@@ -16,7 +17,10 @@ const NAV = [
     { to: '/boxes', label: 'Boxes', icon: Boxes },
     { to: '/grid', label: 'Grid View', icon: Grid3x3 },
   ] },
-  { section: 'Analytics', items: [{ to: '/reports', label: 'Reports', icon: ChartColumn }] },
+  { section: 'Analytics', items: [
+    { to: '/reports', label: 'Reports', icon: ChartColumn },
+    { to: '/activity', label: 'My Activity', icon: History },
+  ] },
   { section: 'Administration', items: [
     { to: '/users', label: 'Users', icon: Users, admin: true },
     { to: '/settings', label: 'Settings', icon: Settings },
@@ -37,6 +41,8 @@ function useOnline() {
 
 function Sidebar({ onNavigate }) {
   const { profile, isAdmin, signOut } = useAuth();
+  const { data: invitations } = useInvitations(isAdmin);
+  const requestCount = (invitations || []).filter((i) => i.status === 'requested').length;
   return (
     <div className="flex h-full flex-col bg-white border-r border-slate-200">
       <div className="flex items-center gap-3 px-5 h-16 border-b border-slate-100 shrink-0">
@@ -65,7 +71,10 @@ function Sidebar({ onNavigate }) {
                     }
                   >
                     <Icon className="h-[18px] w-[18px]" />
-                    {label}
+                    <span className="flex-1">{label}</span>
+                    {to === '/users' && requestCount > 0 && (
+                      <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-slate-900" title={`${requestCount} access request(s) waiting`}>{requestCount}</span>
+                    )}
                   </NavLink>
                 </li>
               ))}
@@ -83,10 +92,10 @@ function Sidebar({ onNavigate }) {
             <div className="text-sm font-medium text-slate-800 truncate">{profile?.full_name || profile?.email}</div>
             <div className="text-xs text-slate-500">{roleLabel[profile?.role]}</div>
           </div>
-          <button onClick={signOut} aria-label="Sign out" title="Sign out" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
+        <button onClick={signOut} className="mt-1 w-full flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+          <LogOut className="h-3.5 w-3.5" /> Sign out
+        </button>
         <div className="mt-3 pt-4 pb-1 border-t border-slate-100">
           <LabLogo className="max-h-16" />
         </div>
