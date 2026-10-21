@@ -144,7 +144,7 @@ function MiniGrid({ box }) {
 }
 
 export default function BoxesPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canEdit } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -187,7 +187,7 @@ export default function BoxesPage() {
       <PageHeader
         title="Boxes"
         subtitle="Every storage box by rack"
-        actions={isAdmin && <Button onClick={() => setEditing({})} disabled={!racks.length}><Plus className="h-4 w-4" /> Add Box</Button>}
+        actions={canEdit && <Button onClick={() => setEditing({})} disabled={!racks.length}><Plus className="h-4 w-4" /> Add Box</Button>}
       />
       <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:items-center">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by box name or nickname" className="sm:max-w-xs flex-1" />
@@ -205,7 +205,7 @@ export default function BoxesPage() {
         <EmptyState
           icon={BoxesIcon}
           title={search || rackFilter ? 'No boxes match' : 'No boxes yet'}
-          action={isAdmin && racks.length > 0 && <Button onClick={() => setEditing({})}><Plus className="h-4 w-4" /> Add Box</Button>}
+          action={canEdit && racks.length > 0 && <Button onClick={() => setEditing({})}><Plus className="h-4 w-4" /> Add Box</Button>}
         >
           {!racks.length ? 'Add a rack first, then add boxes to it.' : null}
         </EmptyState>
@@ -231,8 +231,8 @@ export default function BoxesPage() {
                     label={`Actions for box ${b.name}`}
                     items={[
                       { label: 'Open in Grid View', icon: Grid3x3, onClick: () => navigate(`/grid/${b.id}`) },
-                      isAdmin && { label: 'Edit', icon: Pencil, onClick: () => setEditing(b) },
-                      isAdmin && (b.status === 'archived'
+                      canEdit && { label: 'Edit', icon: Pencil, onClick: () => setEditing(b) },
+                      canEdit && (b.status === 'archived'
                         ? { label: 'Restore', icon: ArchiveRestore, onClick: () => setConfirm({ type: 'restore', box: b }) }
                         : { label: 'Archive', icon: Archive, onClick: () => setConfirm({ type: 'archive', box: b }) }),
                       isAdmin && { label: 'Delete', icon: Trash2, danger: true, onClick: () => setConfirm({ type: 'delete', box: b }) },

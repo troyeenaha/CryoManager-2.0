@@ -26,5 +26,6 @@ form → **Save**. The grid name (e.g. A1B4) is filled in for you. Everything ab
 **Someone else changed it first?** If two people edit the same sample at once, the second save is
 stopped with a message. Close the form; it reloads with the latest data. Nothing is overwritten silently.
 
-**Roles.** *Lab Members* manage samples. *Read-Only* users can look, search and download reports.
-*Administrators* also manage tanks, racks, boxes and users.
+**Roles.** *Lab Members* manage samples and can add, edit and archive boxes (including nicknames).
+*Read-Only* users can look, search and download reports. *Administrators* also manage tanks,
+racks and users, and are the only ones who can permanently delete a box.
