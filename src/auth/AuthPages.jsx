@@ -176,34 +176,49 @@ export function LoginPage() {
  * also confirms their address), they finish here: name, initials, password.
  */
 export function FinishSetupPage() {
-  const { profile, refreshProfile, signOut } = useAuth();
+  const { profile, signOut } = useAuth();
   const n = nameParts(profile?.full_name);
   const [form, setForm] = useState({ first: n.first, last: n.last, initials: profile?.initials || suggestInitials(profile?.full_name), pw: '', pw2: '' });
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   async function submit(e) {
     e.preventDefault();
+    if (busy) return;
     if (!form.first.trim() || !form.last.trim()) return setError('Please enter your first and last name.');
     if (!cleanInitials(form.initials)) return setError('Please enter your initials.');
     if (form.pw.length < 8) return setError('Use a password of at least 8 characters.');
     if (form.pw !== form.pw2) return setError('The two passwords do not match.');
     setBusy(true);
     setError('');
+    // Each step gives up after 25 s with a clear message instead of spinning forever.
+    const step = async (label, promise) => {
+      setStatus(label);
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`"${label}" took too long. Check your internet connection and click Finish again.`)), 25000);
+      });
+      try {
+        const { error: err } = await Promise.race([promise, timeout]);
+        if (err) throw err;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
     try {
-      const { error: pwErr } = await supabase.auth.updateUser({ password: form.pw });
-      if (pwErr) throw pwErr;
-      const { error: pErr } = await supabase.from('profiles')
+      await step('Saving your password', supabase.auth.updateUser({ password: form.pw }));
+      await step('Saving your name and initials', supabase.from('profiles')
         .update({ full_name: `${form.first.trim()} ${form.last.trim()}`, initials: cleanInitials(form.initials) })
-        .eq('id', profile.id);
-      if (pErr) throw pErr;
-      // Remember that they've chosen their own password, so this page isn't shown again.
-      const { error: mErr } = await supabase.rpc('mark_password_set');
-      if (mErr) throw mErr;
-      await refreshProfile();
+        .eq('id', profile.id));
+      await step('Finishing', supabase.rpc('mark_password_set'));
+      setStatus('Opening CryoManager');
+      // A fresh start of the app picks up the finished account for certain.
+      window.location.replace('/');
     } catch (err) {
       setError(friendlyError(err));
+      setStatus('');
       setBusy(false);
     }
   }
@@ -225,7 +240,7 @@ export function FinishSetupPage() {
         <Field label="Type it again" required>
           <Input type="password" value={form.pw2} onChange={set('pw2')} autoComplete="new-password" />
         </Field>
-        <Button type="submit" className="w-full" loading={busy}>Finish and open CryoManager</Button>
+        <Button type="submit" className="w-full" loading={busy}>{busy && status ? `${status}…` : 'Finish and open CryoManager'}</Button>
       </form>
       <button className="mt-5 w-full text-center text-sm text-slate-500 hover:underline" onClick={signOut}>Not you? Sign out</button>
     </AuthShell>
