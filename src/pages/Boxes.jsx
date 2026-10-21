@@ -190,7 +190,7 @@ export default function BoxesPage() {
         actions={isAdmin && <Button onClick={() => setEditing({})} disabled={!racks.length}><Plus className="h-4 w-4" /> Add Box</Button>}
       />
       <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:items-center">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search boxes" className="sm:max-w-xs flex-1" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by box name or nickname" className="sm:max-w-xs flex-1" />
         <Select aria-label="Filter by rack" value={rackFilter} onChange={(e) => setParams(e.target.value ? { rack: e.target.value } : {})} className="sm:max-w-64">
           <option value="">All racks</option>
           {racks.map((r) => <option key={r.id} value={r.id}>{r.tank_name} › Rack {r.name}</option>)}
