@@ -37,6 +37,12 @@ export function friendlyError(err) {
   if (code === '42501' || /row-level security/i.test(msg)) {
     return 'You do not have permission to do that. Ask a lab administrator if you need access.';
   }
+  if (/Invalid login credentials/i.test(msg)) {
+    return 'Email or password is incorrect. Just invited or approved? You don\'t have a password yet: open the email from CryoManager and click its link first.';
+  }
+  if (/Email not confirmed/i.test(msg)) {
+    return 'Please confirm your email first: click the link in the email from CryoManager.';
+  }
   if (code === 'PGRST301' || /JWT expired/i.test(msg)) {
     return 'Your session has expired. Please sign in again.';
   }
